@@ -14,34 +14,48 @@ export interface Incident {
 const DB = 'hoof-incidents-v2';
 function database(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const r = indexedDB.open(DB, 1);
-    r.onupgradeneeded = () =>
-      r.result.createObjectStore('incidents', { keyPath: 'id' });
-    r.onsuccess = () => resolve(r.result);
+    const r = indexedDB.open(DB, 2);
+    r.onupgradeneeded = () => {
+      const store = r.result.objectStoreNames.contains('incidents')
+        ? r.transaction!.objectStore('incidents')
+        : r.result.createObjectStore('incidents', { keyPath: 'id' });
+      if (!store.indexNames.contains('created'))
+        store.createIndex('created', 'created');
+    };
+    r.onsuccess = () => {
+      r.result.onversionchange = () => r.result.close();
+      resolve(r.result);
+    };
     r.onerror = () => reject(r.error);
   });
 }
 export async function saveIncident(incident: Incident) {
+  let db: IDBDatabase | undefined;
   try {
-    const db = await database();
+    db = await database();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction('incidents', 'readwrite'),
+      const tx = db!.transaction('incidents', 'readwrite'),
         store = tx.objectStore('incidents');
       store.put(incident);
-      const all = store.getAll();
-      all.onsuccess = () => {
-        const rows = (all.result as Incident[]).sort(
-          (a, b) => b.created - a.created,
-        );
-        for (const row of rows.slice(5)) store.delete(row.id);
+      // Prune by indexed keys. Reading every full recording here cloned five
+      // large replay histories into memory after each round just to sort them.
+      let retained = 0;
+      const oldest = store.index('created').openKeyCursor(null, 'prev');
+      oldest.onsuccess = () => {
+        const cursor = oldest.result;
+        if (!cursor) return;
+        if (++retained > 5) store.delete(cursor.primaryKey);
+        cursor.continue();
       };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
     });
-    db.close();
     return true;
   } catch {
     return false;
+  } finally {
+    db?.close();
   }
 }
 export async function listIncidents(): Promise<Incident[]> {

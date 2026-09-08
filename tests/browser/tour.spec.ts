@@ -168,13 +168,13 @@ test('complete nine-event tour with real inputs, contracts, upgrades and stable 
   expect(await page.evaluate(() => window.__hoof.run?.status)).toBe('won');
   expect(await page.evaluate(() => window.__hoof.run?.history.length)).toBe(9);
   expect(errors).toEqual([]);
+  await info.attach('tour-outcomes', {
+    body: JSON.stringify(rows, null, 2),
+    contentType: 'application/json',
+  });
   if (memory) {
     // Later acts load new art, but the same actor/effect pools serve every event.
     expect(rows.at(-1)!.heapMB! - rows[2].heapMB!).toBeLessThan(30);
     await memory.detach();
   }
-  await info.attach('tour-outcomes', {
-    body: JSON.stringify(rows, null, 2),
-    contentType: 'application/json',
-  });
 });
