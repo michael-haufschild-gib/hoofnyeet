@@ -1,0 +1,22 @@
+# Dependencies and generated output
+/node_modules/
+/.pnpm-store/
+/dist/
+/coverage/
+*.tsbuildinfo
+
+# Local configuration and credentials
+.env*
+*.pem
+.DS_Store
+/.portless/
+/.serena/
+
+# Local verification, scratch files, and editor history
+/output/
+/outputs/
+/logs/
+/work/
+/.playwright-cli/
+/test-results/
+*.log

@@ -1,0 +1,1073 @@
+/* Play comes first. Menus keep only the choices that affect the next horse. */
+.game-page.play-first {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100svh;
+  padding: 0 clamp(10px, 2vw, 28px) max(10px, env(safe-area-inset-bottom));
+}
+.play-first .topbar {
+  height: 58px;
+  gap: 12px;
+}
+.play-first .brand {
+  font-size: 29px;
+}
+.play-first .header-actions {
+  gap: 8px;
+}
+.play-first.is-home .brand {
+  visibility: hidden;
+}
+.play-first .icon-button {
+  width: 40px;
+  height: 40px;
+  border-color: transparent;
+}
+.play-first .icon-button:hover {
+  background: #e7eadb;
+}
+.play-first .arena {
+  border-radius: 22px;
+  box-shadow: none;
+}
+.game-page.play-first.is-active {
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding-top: max(10px, env(safe-area-inset-top));
+}
+.play-first.is-active .topbar {
+  display: none;
+}
+.play-first .arena-top {
+  top: 16px;
+  right: 16px;
+  left: auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  z-index: 8;
+}
+.play-first .arena-pause {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  background: #fff9e9e8;
+  box-shadow: 0 2px 0 #244d3e20;
+}
+.event-chip {
+  color: #244d3e;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.play-first .tour-home {
+  top: 12%;
+  left: 6%;
+  width: 43%;
+  max-width: 490px;
+}
+.play-first .tour-home h1 {
+  margin: 0 0 30px;
+  font-size: clamp(44px, 7.5cqw, 96px);
+  line-height: 1;
+  letter-spacing: -3px;
+  white-space: nowrap;
+  text-shadow: 0 4px #fff8d8;
+}
+.play-first .tour-home h1 > span {
+  color: #d65f3f;
+}
+.home-controls {
+  display: grid;
+  gap: 10px;
+  border: 0;
+  padding: 0;
+  margin: 0 0 26px;
+  min-width: 0;
+  max-width: 430px;
+}
+.guide-row {
+  display: grid;
+  grid-template-columns: 76px 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+  min-height: 40px;
+}
+.guide-phase {
+  font-size: 11px;
+  font-weight: 900;
+  color: #365d4b;
+}
+.guide-action {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+  font-size: 16px;
+}
+.guide-action > small {
+  font-size: 10px;
+  font-weight: 800;
+  margin-left: -5px;
+}
+.guide-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 31px;
+  padding: 0 7px;
+  border: 1px solid #52755d;
+  border-radius: 7px;
+  background: #f6f7de;
+  box-shadow: 0 3px 0 #52755d;
+  font:
+    800 11px 'Nunito',
+    sans-serif;
+  color: #244d3e;
+}
+.guide-key.secondary {
+  background: #ffdc71;
+}
+.guide-touch {
+  display: none;
+}
+.play-first .tour-home .start-button {
+  width: 210px;
+  max-width: 100%;
+  min-height: 64px;
+  padding: 16px 25px;
+  font-size: 22px;
+  justify-content: space-between;
+}
+.play-first .mode-buttons {
+  gap: 20px;
+  margin-top: 14px;
+}
+.play-first .mode-buttons > button {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 8px 0;
+  min-height: 40px;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 8px;
+}
+.play-first .mode-buttons > button:hover {
+  color: #b74f31;
+}
+.play-first .resume-button {
+  background: #fff9e9d9;
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  min-height: 40px;
+  font-size: 12px;
+  gap: 10px;
+}
+.home-best {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin-top: 20px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #426853;
+}
+.play-first .challenge-warning {
+  max-width: 380px;
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.play-first .planning-screen {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: clamp(18px, 5cqh, 40px) clamp(16px, 5cqw, 64px);
+  gap: 24px;
+  background: #faf6e9;
+}
+.play-first .event-heading h2 {
+  font-size: clamp(28px, 4cqw, 42px);
+  margin: 7px 0 0;
+}
+.play-first .event-heading .eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.play-first .event-heading > p {
+  max-width: 600px;
+  font-size: 12px;
+}
+.play-first .route-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  max-height: 470px;
+}
+.play-first .route-card {
+  border: 2px solid #dce2cd;
+  border-radius: 18px;
+  grid-template-rows: minmax(65px, 1fr) auto;
+  box-shadow: 0 4px 0 #244d3e12;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+.play-first .route-card:hover {
+  border-color: #375e45;
+  transform: translateY(-3px);
+}
+.play-first .route-card:active {
+  transform: translateY(1px);
+}
+.play-first .route-card > div {
+  padding: 18px 22px;
+}
+.play-first .route-card h3 {
+  font-size: clamp(22px, 2.4cqw, 31px);
+  margin: 0 0 7px;
+}
+.play-first .route-card p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+.play-first .route-card .route-go {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: #b45735;
+}
+.route-footnote {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  color: #67775b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.route-footnote > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.play-first .planning-screen.pitstop {
+  grid-template-rows: auto minmax(0, auto) auto auto;
+  align-content: center;
+  gap: 16px;
+}
+.play-first .relic-offers {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0 2px 5px;
+  min-height: 0;
+  max-height: min(430px, 65cqh);
+  overflow: auto;
+}
+.play-first .relic-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 20px;
+  border-radius: 16px;
+  text-align: center;
+  border: 2px solid #dce2cd;
+  min-height: 0;
+}
+.play-first .relic-card:hover:not(:disabled) {
+  border-color: #375e45;
+}
+.play-first .relic-art {
+  flex: 0 1 160px;
+  height: clamp(75px, 23cqh, 160px);
+  width: 100%;
+  min-height: 60px;
+  margin: 0 0 14px;
+}
+.play-first .relic-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.play-first .relic-card h3 {
+  font-size: clamp(20px, 2.3cqw, 28px);
+  margin: 0 0 8px;
+}
+.play-first .relic-card p {
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0 0 12px;
+}
+.play-first .relic-card > b {
+  margin-top: auto;
+  padding-top: 10px;
+  font-size: 11px;
+  color: #a94e30;
+}
+.play-first .synergy-opportunity {
+  font-size: 10px;
+  padding: 5px 8px;
+  margin-bottom: 7px;
+}
+.pitstop-tools {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  min-height: 42px;
+}
+.pocket-money {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #9b7732;
+  font-size: 14px;
+  font-weight: 900;
+}
+.pitstop-tools .text-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 12px;
+  min-height: 42px;
+}
+.pitstop-tools .start-button {
+  margin: 0 0 0 auto;
+  min-height: 44px;
+  padding: 10px 18px;
+  font-size: 12px;
+}
+.play-first .pitstop-shop {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 0 0;
+  margin: 0;
+  background: none;
+  border-top: 1px solid #dce2cd;
+}
+.play-first .pitstop-shop button {
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.play-first .pitstop-shop small {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: #67775b;
+}
+.play-first .replacement {
+  position: absolute;
+  z-index: 9;
+  inset: auto 4% 20px;
+  margin: 0;
+  padding: 20px;
+  background: #fff9e9;
+  border: 2px solid #315d48;
+  border-radius: 18px;
+  box-shadow: 0 0 0 100vmax #203e3270;
+}
+.play-first .replacement > b {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 15px;
+}
+.play-first .replacement > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.play-first .replacement button {
+  min-height: 50px;
+  font-size: 12px;
+}
+.play-first .replacement small {
+  display: block;
+  font-size: 10px;
+  line-height: 1.35;
+  margin-top: 4px;
+}
+.play-first .hud {
+  top: 16px;
+  left: 20px;
+  right: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  pointer-events: none;
+}
+.play-first .hud .hud-metric {
+  height: auto;
+  min-width: 120px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+.play-first .hud-metric strong {
+  color: #244d3e;
+  font: 38px/1 'Lilita One';
+  margin: 0 0 5px;
+  text-shadow: 0 1px 0 #fff8df;
+}
+.play-first .hud-metric strong small {
+  font-size: 17px;
+}
+.play-first .hud-metric > span {
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  color: #315d48;
+}
+.play-first .speed-track {
+  width: 125px;
+  height: 8px;
+  margin: 8px 0 0;
+  background: #244d3e2b;
+  border: 0;
+  appearance: none;
+}
+.play-first .speed-track::-webkit-meter-bar {
+  background: #244d3e2b;
+  border: 0;
+  border-radius: 8px;
+}
+.play-first .speed-track::-webkit-meter-optimum-value {
+  background: #efb935;
+  border-radius: 8px;
+}
+.play-first .speed-track::-moz-meter-bar {
+  background: #efb935;
+  border-radius: 8px;
+}
+.boss-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #315d48;
+}
+.boss-progress span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.play-first .timing-cue {
+  top: 20px;
+  width: auto;
+  max-width: 46%;
+}
+.play-first .timing-cue > span {
+  padding: 9px 15px;
+  font-size: 13px;
+  box-shadow: 0 2px 0 #294c3e20;
+}
+.play-first .timing-cue.jump-now > span {
+  font-size: 19px;
+}
+.play-first .countdown b {
+  font-size: clamp(80px, 16cqh, 130px);
+}
+.play-first .ticker {
+  display: none;
+}
+.play-first .ticker.has-commentary {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: auto;
+  min-height: 42px;
+  padding: 8px 20px;
+  background: #fff9e9ee;
+  border: 0;
+  color: #315d48;
+}
+.play-first .ticker .play-caption {
+  text-align: center;
+  font-size: 15px;
+  color: #315d48;
+  line-height: 1.3;
+}
+.play-first .play-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 10px 0 0;
+  min-height: 0;
+}
+.play-first .action-pad {
+  min-height: 66px;
+  padding: 10px 18px;
+  gap: 14px;
+  border-radius: 16px;
+}
+.play-first .action-pad b {
+  font-size: 16px;
+}
+.play-first .action-pad small {
+  font-size: 11px;
+  margin-top: 3px;
+}
+.play-first .action-pad kbd {
+  margin-left: auto;
+  font-size: 11px;
+}
+.play-first .action-pad .pad-icon {
+  width: 34px;
+  height: 34px;
+}
+.play-first .result-screen {
+  display: block;
+  width: min(440px, calc(100% - 32px));
+  top: clamp(20px, 7cqh, 60px);
+  max-height: calc(100% - 40px);
+  bottom: auto;
+  padding: 26px 30px 18px;
+  border-radius: 24px;
+  background: #fff9e9f7;
+}
+.play-first .result-stamp {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+}
+.play-first .result-screen h2 {
+  margin: 14px 0 6px;
+  font-size: 30px;
+  line-height: 1.1;
+}
+.play-first .result-distance {
+  font-size: 84px;
+  line-height: 1.1;
+}
+.play-first .result-distance > span {
+  font-size: 22px;
+  margin-left: 5px;
+}
+.play-first .result-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 18px;
+  width: auto;
+  margin: 10px 0 18px;
+  padding: 0;
+  border: 0;
+  color: #6c795c;
+  font-size: 11px;
+}
+.play-first .result-stats b {
+  font:
+    800 14px Nunito,
+    sans-serif;
+  color: #315d48;
+}
+.play-first .result-screen .result-reason {
+  display: block;
+  margin: 8px 0 14px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.play-first .result-screen .unlock-note {
+  display: block;
+  font-size: 10px;
+  margin: 0 0 12px;
+}
+.play-first .result-screen .start-button {
+  min-height: 50px;
+  padding: 12px 18px;
+  margin: 0;
+  font-size: 15px;
+}
+.play-first .result-links {
+  gap: 26px;
+  margin-top: 10px;
+}
+.play-first .result-links button {
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.play-first .pause-screen > .text-button {
+  display: inline-flex;
+  gap: 8px;
+  margin: 18px 10px 0;
+  padding: 10px;
+  min-height: 42px;
+}
+.play-first .skip-replay {
+  min-height: 40px;
+}
+.collection-link {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #dce2cd;
+  background: #f3f1e4;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin: 16px 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #315d48;
+}
+.collection-link svg:last-child {
+  margin-left: auto;
+}
+.export-options {
+  margin-bottom: 16px;
+  border-bottom: 1px solid #dce2cd;
+  padding-bottom: 12px;
+}
+.export-options summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 10px 0;
+  color: #64735a;
+}
+.clip-stage {
+  padding: 20px;
+}
+@media (max-width: 600px) {
+  .play-first .arena.is-title::after {
+    content: '';
+    position: absolute;
+    inset: 48% 0 0;
+    background: linear-gradient(transparent, #fff8e8f5 30%, #fff8e8);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .play-first .topbar {
+    height: 52px;
+  }
+  .play-first .brand {
+    font-size: 27px;
+  }
+  .play-first .tour-home {
+    inset: 22px 20px 16px;
+    width: auto;
+    max-width: none;
+    display: grid;
+    grid-template-rows: auto 1fr auto auto auto auto;
+    justify-items: stretch;
+  }
+  .play-first .tour-home h1 {
+    grid-row: 1;
+    font-size: clamp(38px, 13cqw, 70px);
+    margin: 0;
+    text-align: center;
+    letter-spacing: -2px;
+  }
+  .play-first .home-controls {
+    grid-row: 3;
+    width: 100%;
+    margin-bottom: 18px;
+    gap: 9px;
+  }
+  .guide-row {
+    grid-template-columns: 64px 1fr 1fr;
+    gap: 8px;
+    min-height: 33px;
+  }
+  .guide-phase {
+    font-size: 10px;
+  }
+  .guide-action {
+    font-size: 14px;
+    gap: 7px;
+  }
+  .guide-key {
+    min-width: 32px;
+    height: 28px;
+    padding: 0 5px;
+    font-size: 9px;
+  }
+  .guide-action > small {
+    font-size: 9px;
+    margin-left: -4px;
+  }
+  .play-first .tour-home .start-button {
+    grid-row: 4;
+    min-height: 54px;
+    width: 100%;
+    font-size: 20px;
+  }
+  .play-first .mode-buttons {
+    grid-row: 5;
+    margin-top: 8px;
+    justify-content: center;
+    gap: 30px;
+  }
+  .play-first .resume-button {
+    grid-row: 6;
+    justify-content: center;
+    margin-top: 0;
+  }
+  .play-first .challenge-warning {
+    position: absolute;
+    top: 62px;
+    width: 100%;
+    text-align: center;
+    font-size: 10px;
+  }
+  .home-best {
+    margin-top: 12px;
+  }
+  .play-first .planning-screen {
+    padding: 20px 16px;
+    gap: 16px;
+  }
+  .play-first .route-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+    max-height: none;
+    gap: 14px;
+  }
+  .play-first .route-card {
+    grid-template-rows: minmax(55px, 1fr) auto;
+  }
+  .play-first .route-card > div {
+    padding: 12px 15px;
+  }
+  .play-first .route-card h3 {
+    font-size: 22px;
+    margin-bottom: 5px;
+  }
+  .play-first .route-card p {
+    font-size: 11px;
+    margin-bottom: 8px;
+  }
+  .play-first .route-card .route-go {
+    font-size: 11px;
+  }
+  .route-footnote {
+    font-size: 11px;
+  }
+  .play-first .relic-offers {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(3, minmax(105px, 1fr));
+    gap: 10px;
+  }
+  .play-first .relic-card {
+    display: grid;
+    grid-template-columns: 74px minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    gap: 4px 12px;
+    text-align: left;
+    padding: 12px;
+    align-content: center;
+  }
+  .play-first .relic-art {
+    grid-row: 1 / 5;
+    grid-column: 1;
+    width: 74px;
+    height: 80px;
+    margin: 0;
+  }
+  .play-first .relic-card h3 {
+    font-size: 19px;
+    margin: 0;
+  }
+  .play-first .relic-card p {
+    font-size: 11px;
+    line-height: 1.35;
+    margin: 0;
+  }
+  .play-first .relic-card > b {
+    font-size: 10px;
+    padding: 3px 0 0;
+    margin: 0;
+  }
+  .play-first .synergy-opportunity {
+    margin: 0;
+    padding: 2px 5px;
+    font-size: 9px;
+  }
+  .play-first .hud {
+    top: 15px;
+    left: 14px;
+    gap: 8px;
+  }
+  .play-first .hud .hud-metric {
+    min-width: 90px;
+  }
+  .play-first .hud-metric strong {
+    font-size: 31px;
+  }
+  .play-first .hud-metric > span {
+    font-size: 10px;
+  }
+  .play-first .speed-track {
+    width: 80px;
+  }
+  .play-first .timing-cue {
+    top: 24px;
+    max-width: 44%;
+  }
+  .play-first .timing-cue > span {
+    padding: 7px 10px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .play-first .timing-cue.jump-now > span {
+    font-size: 17px;
+  }
+  .play-first .arena-top {
+    top: 12px;
+    right: 12px;
+    gap: 6px;
+  }
+  .play-first .event-chip {
+    font-size: 9px;
+  }
+  .boss-progress {
+    font-size: 9px;
+    padding-top: 2px;
+  }
+  .play-first .ticker.has-commentary {
+    min-height: 48px;
+    padding: 7px 12px;
+  }
+  .play-first .ticker .play-caption {
+    font-size: 13px;
+  }
+  .play-first .play-controls {
+    gap: 8px;
+  }
+  .play-first .action-pad {
+    min-height: 66px;
+    gap: 9px;
+    padding: 10px 12px;
+  }
+  .play-first .action-pad b {
+    font-size: 13px;
+  }
+  .play-first .action-pad small {
+    font-size: 10px;
+  }
+  .play-first .action-pad .pad-icon {
+    width: 25px;
+    height: 25px;
+  }
+  .play-first .result-screen {
+    top: 26px;
+    padding: 22px 22px 12px;
+    max-height: calc(100% - 52px);
+  }
+  .play-first .result-screen h2 {
+    font-size: 28px;
+    margin-top: 12px;
+  }
+  .play-first .result-distance {
+    font-size: 76px;
+  }
+}
+@media (hover: none) {
+  .guide-keyboard {
+    display: none;
+  }
+  .guide-touch {
+    display: flex;
+  }
+  .play-first .action-pad kbd {
+    display: none;
+  }
+}
+@media (max-height: 550px) and (orientation: landscape) {
+  .play-first .topbar {
+    height: 44px;
+  }
+  .play-first .brand {
+    font-size: 25px;
+  }
+  .play-first .tour-home {
+    top: 6%;
+    width: 45%;
+  }
+  .play-first .tour-home h1 {
+    font-size: clamp(40px, 6.5cqw, 60px);
+    margin-bottom: 14px;
+  }
+  .home-controls {
+    gap: 4px;
+    margin-bottom: 14px;
+  }
+  .guide-row {
+    min-height: 30px;
+    grid-template-columns: 62px 1fr 1fr;
+    gap: 7px;
+  }
+  .guide-action {
+    font-size: 13px;
+    gap: 7px;
+  }
+  .guide-key {
+    min-width: 32px;
+    height: 25px;
+    font-size: 9px;
+  }
+  .play-first .tour-home .start-button {
+    min-height: 48px;
+    font-size: 18px;
+    padding: 10px 18px;
+    width: 180px;
+  }
+  .play-first .mode-buttons {
+    margin-top: 8px;
+  }
+  .play-first .home-best {
+    display: none;
+  }
+  .play-first .planning-screen {
+    padding: 14px 22px;
+    gap: 12px;
+  }
+  .play-first .event-heading h2 {
+    font-size: 28px;
+  }
+  .play-first .route-card > div {
+    padding: 10px 14px;
+  }
+  .play-first .route-card h3 {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+  .play-first .route-card p {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .play-first .route-card .route-go {
+    font-size: 11px;
+  }
+  .play-first .route-footnote {
+    font-size: 10px;
+  }
+  .play-first .relic-offers {
+    gap: 10px;
+  }
+  .play-first .relic-card {
+    padding: 10px 12px;
+  }
+  .play-first .relic-art {
+    height: 65px;
+    min-height: 45px;
+    flex-basis: 65px;
+    margin-bottom: 5px;
+  }
+  .play-first .relic-card h3 {
+    font-size: 19px;
+    margin-bottom: 4px;
+  }
+  .play-first .relic-card p {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .play-first .relic-card > b {
+    font-size: 9px;
+    padding-top: 4px;
+  }
+  .play-first .pitstop-tools {
+    min-height: 36px;
+  }
+  .play-first .pitstop-tools .text-button {
+    min-height: 36px;
+  }
+  .play-first .pitstop-shop {
+    padding-top: 6px;
+    gap: 8px;
+  }
+  .play-first .pitstop-shop small {
+    flex-basis: auto;
+    max-width: 200px;
+  }
+  .play-first .arena-top {
+    top: 10px;
+    right: 12px;
+  }
+  .play-first .hud {
+    top: 12px;
+    left: 16px;
+  }
+  .play-first .hud-metric strong {
+    font-size: 30px;
+  }
+  .play-first .timing-cue {
+    top: 16px;
+  }
+  .play-first .ticker.has-commentary {
+    min-height: 36px;
+    padding: 5px 16px;
+  }
+  .play-first .ticker .play-caption {
+    font-size: 12px;
+  }
+  .play-first .play-controls {
+    padding-top: 8px;
+  }
+  .play-first .action-pad {
+    min-height: 50px;
+    padding: 7px 16px;
+  }
+  .play-first .action-pad b {
+    font-size: 14px;
+  }
+  .play-first .action-pad small {
+    display: inline;
+    margin-left: 10px;
+  }
+  .play-first .result-screen {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 28px;
+    top: 22px;
+    width: min(660px, calc(100% - 80px));
+    padding: 20px 24px;
+    max-height: calc(100% - 44px);
+  }
+  .play-first .result-stamp {
+    grid-column: 1;
+  }
+  .play-first .result-screen h2 {
+    grid-column: 1;
+    margin: 8px 0 0;
+    font-size: 25px;
+  }
+  .play-first .result-distance {
+    grid-column: 1;
+    font-size: 66px;
+  }
+  .play-first .result-stats {
+    grid-column: 1;
+    margin: 3px 0 0;
+    gap: 4px 12px;
+  }
+  .play-first .result-main-actions {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    align-self: center;
+  }
+  .play-first .result-links {
+    grid-column: 2;
+    grid-row: 4 / 6;
+    margin: 0;
+    gap: 10px;
+  }
+  .play-first .result-screen .result-reason {
+    grid-column: 1;
+    font-size: 10px;
+    margin: 4px 0 0;
+  }
+  .play-first .result-screen .unlock-note {
+    display: none;
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "atlas": "dark-slapstick-atlas.png",
+  "width": 1536,
+  "height": 1024,
+  "coordinateFormat": "x,y,width,height",
+  "crops": {
+    "skeleton": [
+      20,
+      31,
+      366,
+      454
+    ],
+    "ghost": [
+      413,
+      7,
+      294,
+      484
+    ],
+    "piano": [
+      757,
+      24,
+      385,
+      450
+    ],
+    "hayBaler": [
+      1158,
+      49,
+      366,
+      419
+    ],
+    "horseBale": [
+      19,
+      561,
+      368,
+      402
+    ],
+    "gravestone": [
+      393,
+      560,
+      356,
+      404
+    ],
+    "jaws": [
+      775,
+      522,
+      368,
+      444
+    ],
+    "debris": [
+      1157,
+      532,
+      364,
+      420
+    ]
+  },
+  "notes": [
+    "Real RGBA alpha verified. Hidden RGB background may display in tool previews; the PNG background is transparent.",
+    "Ghost crop uses extra padding for translucent wisps.",
+    "Use explicit crops instead of exact 4x2 grid splitting.",
+    "Debris has two bones, not the requested three; duplicate one bone at runtime if needed.",
+    "No asset editing performed."
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "atlas": "pony-atlas.png",
+  "width": 1536,
+  "height": 1024,
+  "background": "countryside.png",
+  "backgroundWidth": 1536,
+  "backgroundHeight": 1024,
+  "coordinateFormat": "x,y,width,height",
+  "crops": {
+    "torso": [
+      25,
+      170,
+      368,
+      254
+    ],
+    "head": [
+      422,
+      26,
+      386,
+      456
+    ],
+    "tail": [
+      873,
+      76,
+      283,
+      415
+    ],
+    "bentLeg": [
+      1311,
+      125,
+      149,
+      333
+    ],
+    "straightLeg": [
+      123,
+      597,
+      147,
+      365
+    ],
+    "surprisedHead": [
+      392,
+      522,
+      382,
+      462
+    ],
+    "sheep": [
+      814,
+      586,
+      333,
+      365
+    ],
+    "goose": [
+      1213,
+      526,
+      292,
+      437
+    ]
+  },
+  "notes": [
+    "Atlas has real alpha. Ignore dark hidden RGB rendered by some previewers.",
+    "Observed composition approximates the 4x2 grid; use the explicit crop rectangles, not equal grid cells.",
+    "Raw parts have individual cell-fitting scales; rescale torso, head, tail and legs separately for assembly.",
+    "Use bentLeg and straightLeg twice each to build four independently rotatable limbs."
+  ]
+}
