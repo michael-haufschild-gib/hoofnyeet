@@ -55,8 +55,6 @@ void test('eight aftermaths produce distinct props and consequences on one clock
         }
       }
       for (const part of required) {
-        // The laundry is the existing torso being pinned to a supported rope.
-        if (landing === 'fence' && part === 'torso') continue;
         assert.ok(
           arrivals.includes(part),
           `${landing}/${angle} never produced ${part}`,

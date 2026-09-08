@@ -1,0 +1,56 @@
+{
+  "generator": "image_gen",
+  "assets": [
+    {
+      "id": "sausage",
+      "path": "/art/carnage/sausage.webp",
+      "source": "/Users/Spare/.codex/generated_images/01a07ca8-6861-7383-9a9f-2dc353368f59/exec-a04549e2-4220-49ce-8a25-f46153ab1f59.png",
+      "width": 192,
+      "height": 100,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "alpha": true,
+      "opaqueRatio": 0.5462247380239521,
+      "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/carnage/originals/sausage.png",
+      "promptSummary": "One isolated transparent side-view glossy pink-red sausage pony with a cream offended face, turquoise eyes, orange mane tuft, tiny riding helmet and four absurdly tiny legs. Dark slapstick storybook cel illustration, burgundy outlines and rich warm highlights. No sheet, text or scenery.",
+      "verified": true,
+      "bytes": 8740
+    },
+    {
+      "id": "bouquet",
+      "path": "/art/carnage/bouquet.webp",
+      "source": "/Users/Spare/.codex/generated_images/01a07ca8-6861-7383-9a9f-2dc353368f59/exec-872e80e5-21e9-4ac0-8500-73fb5d3cb1dd.png",
+      "width": 268,
+      "height": 320,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "alpha": true,
+      "opaqueRatio": 0.5971198694029851,
+      "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/carnage/originals/bouquet.png",
+      "promptSummary": "One isolated transparent carnivorous congratulatory bouquet: coral roses, cream daisies, pale mint gift paper, gold bow. The largest rose is an enormous burgundy mouth with ivory fang petals, red tongue and jelly drips. Angry turquoise eyes. Hand painted animation cel illustration. No atlas, text or scenery.",
+      "verified": true,
+      "bytes": 33336
+    },
+    {
+      "id": "skin",
+      "path": "/art/carnage/skin.webp",
+      "source": "/Users/Spare/.codex/generated_images/01a07ca8-6861-7383-9a9f-2dc353368f59/exec-c089610d-6923-4302-b53e-05efd9029a35.png",
+      "width": 320,
+      "height": 250,
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "alpha": true,
+      "opaqueRatio": 0.5545190868263473,
+      "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/carnage/originals/skin.png",
+      "promptSummary": "One isolated transparent empty floppy cream pony skin costume, four limp dangling legs, dark plum hooves, orange tail, golden freckles and scalloped coral torn edge. No head or living animal inside. Stylized red jelly drips. Side view, hand painted storybook cel illustration. No clothes pegs, washing line, atlas, text or backdrop.",
+      "verified": true,
+      "bytes": 25888
+    }
+  ]
+}

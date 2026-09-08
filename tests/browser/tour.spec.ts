@@ -101,7 +101,7 @@ test('complete nine-event tour with real inputs, contracts, upgrades and stable 
         });
         expect(resources.bodies).toBeLessThanOrEqual(80);
         expect(resources.sceneObjects).toBeLessThan(700);
-        expect(resources.replayFrames).toBeLessThanOrEqual(1440);
+        expect(resources.replayFrames).toBeLessThanOrEqual(2400);
         let heapMB: number | null = null;
         if (memory) {
           await memory.send('HeapProfiler.collectGarbage');

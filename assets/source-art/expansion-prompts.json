@@ -3,11 +3,11 @@
   "generationPolicy": "One generation per asset, six total. No variants, regeneration, code-drawn art or image edits.",
   "referenceImages": [
     {
-      "path": "/Users/Spare/Documents/code/hoof-and-yeet/public/art/countryside.png",
+      "path": "/Users/Spare/Documents/code/hoof-and-yeet/assets/source-art/countryside.png",
       "role": "Viewed pastoral paint style reference"
     },
     {
-      "path": "/Users/Spare/Documents/code/hoof-and-yeet/public/art/pony-atlas.png",
+      "path": "/Users/Spare/Documents/code/hoof-and-yeet/assets/source-art/pony-atlas.png",
       "role": "Viewed cartoon prop style reference"
     }
   ],

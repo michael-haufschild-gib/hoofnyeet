@@ -1,8 +1,10 @@
+import { CarnageEffects } from './effects/carnage-effects';
 import {
   Application,
   Assets,
   Container,
   Graphics,
+  Rectangle,
   Sprite,
   Text,
   Texture,
@@ -25,7 +27,8 @@ import { drawJetstream } from './flight';
 import { ponyPose } from './pose';
 import { frameGame, TITLE_PONY_X, type CameraFrame } from './camera';
 import { RenderBudget } from './render-budget';
-import { PONIES, type PonyId } from './cosmetics';
+import { PONIES, type PonyId, type PonyOutfit } from './cosmetics';
+import { Headwear } from './headwear';
 import { ponyPalette } from './effects/pony-palette';
 import {
   GROUND_Y,
@@ -72,7 +75,10 @@ export class GameRenderer {
   private screenFx = new Graphics();
   private textures: Record<string, Texture> = {};
   private paletteTextures = new Map<string, Texture>();
-  private portraits: Record<string, string> | null = null;
+  private portraits = new Map<Hat, Record<string, string>>();
+  private outfit: PonyOutfit = { hat: 'helmet', ponyId: 'buttercup' };
+  private headwear!: Headwear;
+  private crashHeadwear!: Headwear;
   private backgrounds = new Map<WorldId, Texture>();
   private loading = new Map<WorldId, Promise<void>>();
   private appCreated = false;
@@ -81,6 +87,8 @@ export class GameRenderer {
   private bgSprites = [new Sprite()];
   private impactEffects!: ImpactEffects;
   private perkEffects!: PerkEffects;
+  private carnageEffects!: CarnageEffects;
+  private carnageLoading: Promise<void> | undefined;
   private pony = new Container();
   private ponyParts: Record<string, Sprite> = {};
   private shadow = new Graphics();
@@ -167,6 +175,13 @@ export class GameRenderer {
     this.decor.addChild(this.landingLabel);
     this.impactEffects = new ImpactEffects(this.app);
     this.perkEffects = new PerkEffects(this.textures['bean-propulsion-cloud']);
+    this.carnageEffects = new CarnageEffects(this.textures);
+    this.world.addChildAt(
+      this.carnageEffects.behind,
+      this.world.getChildIndex(this.actors),
+    );
+    this.fx.addChild(this.carnageEffects.front);
+    this.scene.addChild(this.carnageEffects.screen);
     this.world.addChildAt(
       this.perkEffects.behind,
       this.world.getChildIndex(this.actors),
@@ -226,15 +241,16 @@ export class GameRenderer {
     this.ready = true;
     this.resize();
     this.loadEquipment();
+    this.headwear = new Headwear(this.textures);
+    this.crashHeadwear = new Headwear(this.textures);
+    this.pony.addChild(this.headwear.view);
+    this.actors.addChild(this.crashHeadwear.view);
   }
   private loadEquipment() {
     for (const key of [
       'jetpack',
       'wing-left',
       'wing-right',
-      'party-cone',
-      'crown',
-      'astronaut-helmet',
       'magnetic-horseshoe',
       'ghost-portal-ring',
       'tnt',
@@ -247,6 +263,22 @@ export class GameRenderer {
     }
   }
   async loadWorld(id: WorldId): Promise<void> {
+    if (!this.carnageLoading) {
+      this.carnageLoading = Promise.all(
+        ['sausage', 'bouquet', 'skin'].map(async (key) => {
+          const texture = await Assets.load<Texture>(
+            `/art/carnage/${key}.webp`,
+          );
+          if (!this.disposed) this.textures[key] = texture;
+        }),
+      )
+        .then(() => {})
+        .catch((error) => {
+          this.carnageLoading = undefined;
+          throw error;
+        });
+    }
+    await this.carnageLoading;
     if (this.backgrounds.has(id)) return;
     const pending = this.loading.get(id);
     if (pending) return pending;
@@ -309,6 +341,7 @@ export class GameRenderer {
     this.particles = [];
     this.impactEffects?.reset();
     this.perkEffects?.reset();
+    this.carnageEffects?.reset();
   }
   event(e: GameEvent) {
     if (!this.ready) return;
@@ -439,23 +472,17 @@ export class GameRenderer {
       200,
       time * 0.4,
     );
-    gear(
-      'party-cone',
-      this.hat === 'party' || combos.includes('party'),
-      49,
-      -78,
-      44,
-      58,
-      0.17,
-    );
-    gear('crown', this.hat === 'crown', 50, -74, 54, 43, 0.1);
-    gear('astronaut-helmet', this.hat === 'space', 47, -28, 91, 103);
     this.ponyParts.torso.tint = combos.includes('arcade')
       ? 0x94fadd
       : combos.includes('meteor')
         ? 0xffa472
         : 0xffffff;
     this.ponyParts.head.alpha = combos.includes('haunted') ? 0.72 : 1;
+    this.headwear.fit(
+      this.outfit.hat,
+      this.ponyParts.head,
+      combos.includes('party'),
+    );
     this.aura.clear();
     if (!this.reduced) {
       if (combos.includes('meteor'))
@@ -511,6 +538,7 @@ export class GameRenderer {
       this.label(`${i * 100} m`, TRACK.trampoline + i * 1000, 45, 17);
   }
   draw(s: GameState, dt: number, time: number) {
+    this.outfit = s.outfit ?? { hat: this.hat, ponyId: this.ponyId };
     if (!this.ready) return;
     time = s.sceneTime ?? time;
     // Recorded simulation time includes the exact hit freezes and replay speed.
@@ -536,6 +564,10 @@ export class GameRenderer {
       this.reduced,
       this.captionInset,
       this.hudInset || undefined,
+      this.outfit.hat !== 'helmet' ||
+        synergies(s.equipment).some((c) => c.id === 'party')
+        ? 175
+        : 120,
     );
     this.cameraX = this.framing.x;
     this.cameraY = this.framing.y;
@@ -723,7 +755,9 @@ export class GameRenderer {
         GROUND_Y -
         artFoot(part, p.width, p.height, p.rotation, 1) -
         (hovering ? 30 + Math.sin(time * 3 + cell) * 5 : 0);
-      p.visible = !title && (crash || Math.abs(p.x - s.x) > 120);
+      // The crowd is already behind the pony in the scene graph. Horizontal
+      // proximity is not occlusion: a pony flying overhead must not erase it.
+      p.visible = !title;
     }
     for (let i = 0; i < this.courseProps.length; i++) {
       const p = this.courseProps[i];
@@ -834,6 +868,28 @@ export class GameRenderer {
         p.destroy();
         this.bodySprites.delete(id);
       }
+    const head = s.wreck?.bodies.find((b) =>
+      s.wreck!.headId !== undefined
+        ? b.id === s.wreck!.headId
+        : ['head', 'surprisedHead', 'offended-head'].includes(b.part),
+    );
+    this.crashHeadwear.view.visible = false;
+    if (
+      crash &&
+      head &&
+      ['head', 'surprisedHead', 'offended-head'].includes(head.part)
+    ) {
+      const sprite = this.bodySprites.get(head.id)!;
+      this.crashHeadwear.fit(
+        this.outfit.hat,
+        sprite,
+        synergies(s.equipment).some((c) => c.id === 'party'),
+      );
+      this.actors.setChildIndex(
+        this.crashHeadwear.view,
+        this.actors.children.length - 1,
+      );
+    }
     for (const p of this.particles) {
       p.life -= dt;
       p.sprite.x += p.vx * dt;
@@ -863,6 +919,16 @@ export class GameRenderer {
       this.budget.density,
     );
     this.impactEffects.update(dt, time, s, this.reduced);
+    this.carnageEffects.update(
+      s,
+      this.gentle,
+      this.reduced,
+      this.budget.density,
+      this.cameraX,
+      this.w,
+      this.zoom,
+      this.h,
+    );
     this.lastTime = time;
     this.app.render();
   }
@@ -879,7 +945,7 @@ export class GameRenderer {
       this.ready = false;
     }
   }
-  private ponyTexture(part: string, id = this.ponyId): Texture {
+  private ponyTexture(part: string, id = this.outfit.ponyId): Texture {
     const base = this.textures[part];
     if (
       id === 'buttercup' ||
@@ -910,21 +976,31 @@ export class GameRenderer {
     }
     return texture;
   }
-  ponyPortraits() {
+  ponyPortraits(hat = this.hat) {
     if (!this.ready) return {};
-    if (this.portraits) return this.portraits;
-    this.portraits = {};
+    const cached = this.portraits.get(hat);
+    if (cached) return cached;
+    const portraits: Record<string, string> = {};
     for (const pony of PONIES) {
-      const sprite = new Sprite(this.ponyTexture('head', pony.id));
-      sprite.width = 112;
-      sprite.height = 140;
+      const target = new Container();
+      const sprite = new Sprite({
+        texture: this.ponyTexture('head', pony.id),
+        anchor: 0.5,
+      });
+      sprite.width = 71;
+      sprite.height = 87;
+      const headwear = new Headwear(this.textures);
+      headwear.fit(hat, sprite);
+      target.addChild(sprite, headwear.view);
       const canvas = this.app.renderer.extract.canvas({
-        target: sprite,
+        target,
+        frame: new Rectangle(-56, -90, 112, 144),
         resolution: 1,
       });
-      this.portraits[pony.id] = canvas.toDataURL?.('image/png') ?? '';
-      sprite.destroy();
+      portraits[pony.id] = canvas.toDataURL?.('image/png') ?? '';
+      target.destroy({ children: true });
     }
-    return this.portraits;
+    this.portraits.set(hat, portraits);
+    return portraits;
   }
 }

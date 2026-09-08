@@ -1,3 +1,4 @@
+import { CARNAGE_SOUNDS } from './escalation';
 import type { GameEvent, GameState } from './simulation';
 import { worldById } from './content';
 export class HorseAudio {
@@ -48,6 +49,7 @@ export class HorseAudio {
         this.effectGain = this.context.createGain();
         this.effectGain.connect(this.master);
         for (const id of [
+          ...CARNAGE_SOUNDS,
           'gallop',
           'flip',
           'ring',

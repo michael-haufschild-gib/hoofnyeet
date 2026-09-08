@@ -16,7 +16,7 @@ async function attempt(page: Page, touch = false, mouse = false) {
   const tap = await nativeActions(page, touch, mouse);
   let lastDistance = 0;
   let flightChecked = false;
-  for (let i = 0; i < 390; i++) {
+  for (let i = 0; i < 650; i++) {
     const s = await page.evaluate(() => window.__hoof.snapshot());
     if (s.phase === 'runup') {
       // React to the visible cue before changing the approach speed.
@@ -155,7 +155,7 @@ test('clip export contains video and audio; native sharing is separate', async (
   page,
 }, info) => {
   test.skip(info.project.name !== 'chromium');
-  test.setTimeout(65000);
+  test.setTimeout(110000);
   await ready(page);
   await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   await attempt(page);
@@ -163,9 +163,13 @@ test('clip export contains video and audio; native sharing is separate', async (
   await expect(
     page.getByRole('button', { name: 'Challenge a friend' }),
   ).toBeVisible();
+  const recordingDuration = await page.evaluate(
+    () => window.__hoof.recording().duration,
+  );
+  await expect(page.getByLabel('Highlight length')).toHaveValue('0');
   await page.getByRole('button', { name: /^MAKE VIDEO$/ }).click();
   await expect(page.getByRole('button', { name: /^SHARE VIDEO$/ })).toBeVisible(
-    { timeout: 30000 },
+    { timeout: (recordingDuration + 15) * 1000 },
   );
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download', exact: true }).click();

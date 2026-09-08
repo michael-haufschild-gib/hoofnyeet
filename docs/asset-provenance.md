@@ -32,3 +32,17 @@ Official terms reviewed September 7, 2026:
 The music terms define the restricted Studio Games category through monetization and multiple platforms. This release's stated use does not meet that definition. Integrated game sound and audiovisual use are supported; standalone SFX redistribution is restricted. Exported player clips are treated as integrated audiovisual use and do not grant broader rights to the underlying assets.
 
 Account-specific plan and agreement proof could not be read with the available MCP permissions. Successful API generation receipts are available but are not represented as a full license audit. No paid/Enterprise license was bought during this work. Recheck the applicable plan and terms before adding advertisements, selling the game, releasing on other platforms, or licensing assets separately.
+
+## Content version 5 escalation assets
+
+The September 8, 2026 escalation adds three individually generated transparent illustrations: sausage pony, carnivorous bouquet, and discarded pony skin. Originals are retained in `../hoof-and-yeet-assets/art/carnage/originals/`; bundled, alpha-trimmed WebP files and verified pivots are in `public/art/carnage/`. The manifest there records source files, prompt summaries, dimensions, and transparency checks. These are individual images, not cropped sprite-sheet cells, and load when a world is prepared.
+
+Sixteen additional short effects were generated through ElevenLabs MCP. Exact prompts and receipts are retained in `public/audio/manifest.json` and `../hoof-and-yeet-assets/audio/escalation-receipts.json`. Original MP3s remain in per-effect directories under `audio/originals`; normalized production files are retained under `audio/production` and bundled in `public/audio`. The existing soundtrack and effects are preserved. All new files decode as non-silent mono 44.1 kHz MP3s, with measured peaks below -3.5 dBFS. The receipt rip and UFO sneeze have their silent lead-ins trimmed; the manifest records those trims. No spoken TTS was used.
+
+## Image production pipeline
+
+`public/art` contains only game-ready WebP textures and runtime manifests. The unused PNG originals, complete source atlases, and crop/prompt metadata are preserved in `assets/source-art`, outside Vite's public deployment directory. Full-resolution texture masters are retained in `assets/source-art/masters`.
+
+Run `pnpm optimize:images` to regenerate compressed, size-budgeted derivatives from those masters. It preserves the large title pony and outfit detail, reduces small props and effects according to their rendered size, retains alpha, and never repeatedly recompresses the previous output. Edit the masters when replacing artwork. `scripts/prepare-sprites.mjs` refreshes extracted masters before optimization and retains separately authored expressions and wings.
+
+Physics contact geometry stays tied to the original silhouettes in `lib/game/art-metrics.json`; reducing a texture's pixel dimensions does not change hitboxes, pivots, world size, or scoring. The optimization report is written to `output/image-optimization/after.json`. The September 8 pass reduced 64 runtime textures from 3,442,396 to 2,302,346 bytes and resized 36 of them; the source PNGs and atlases are additional deployment savings, not player-download savings because the renderer already used WebP.

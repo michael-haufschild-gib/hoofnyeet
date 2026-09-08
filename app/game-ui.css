@@ -507,7 +507,9 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin: 0;
-  padding: 0 2px 5px;
+  /* Reserve the hover lift, focus outline and lower shadow inside the scrollport. */
+  padding: 14px 10px 16px;
+  scroll-padding: 14px 10px 16px;
   min-height: 0;
   max-height: min(430px, 65cqh);
   overflow: auto;
@@ -1232,7 +1234,7 @@
     font-size: 26px;
   }
   .browse-dialog .dialog-body {
-    padding: 0 24px 14px;
+    padding: 10px 24px 14px;
   }
   .browse-intro {
     margin-bottom: 10px;

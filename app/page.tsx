@@ -109,7 +109,7 @@ export default function Home() {
     [shopping, setShopping] = useState(false),
     [portrait, setPortrait] = useState(true),
     [captions, setCaptions] = useState(true),
-    [clipLength, setClipLength] = useState(12),
+    [clipLength, setClipLength] = useState(0),
     [progress, setProgress] = useState<number | null>(null),
     [clip, setClip] = useState<Blob | null>(null),
     [notice, setNotice] = useState(''),
@@ -123,6 +123,12 @@ export default function Home() {
     'controls' | 'wardrobe' | 'rules'
   >('controls');
   const [portraits, setPortraits] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (panel === 'settings' && view.ready)
+      setPortraits(
+        controller.current?.renderer.ponyPortraits(view.save.hat) ?? {},
+      );
+  }, [panel, view.ready, view.save.hat]);
   const hudRef = useCallback((node: HTMLDivElement | null) => {
     controller.current?.observeHud(node);
   }, []);
@@ -193,8 +199,6 @@ export default function Home() {
     setPanel(p);
     setNotice('');
     if (p === 'scrapbook') void listIncidents().then(setIncidents);
-    if (p === 'settings')
-      setPortraits(controller.current?.renderer.ponyPortraits() ?? {});
     if (p === 'clip') {
       const recording = controller.current?.recording();
       setSelectedRecording(
@@ -234,7 +238,7 @@ export default function Home() {
         await exportClip(recording, {
           portrait,
           captions,
-          duration: clipLength,
+          duration: clipLength || undefined,
           signal: abort.signal,
           progress: setProgress,
         }),
@@ -1353,7 +1357,7 @@ export default function Home() {
                   >
                     <div className="wardrobe-heading">
                       <h3>MEET YOUR LIABILITY</h3>
-                      <span>New outfits apply to your next horse.</span>
+                      <span>Applied immediately.</span>
                     </div>
                     <div className="pony-grid">
                       {PONIES.map((pony) => {
@@ -1413,7 +1417,13 @@ export default function Home() {
                             height={70}
                           />
                           <b>{hat.name}</b>
-                          <small>{hat.requirement}</small>
+                          <small>
+                            {view.save.hat === hat.id
+                              ? 'Equipped'
+                              : view.save.hats.includes(hat.id)
+                                ? 'Equip'
+                                : hat.requirement}
+                          </small>
                         </button>
                       ))}
                     </div>
@@ -1585,7 +1595,7 @@ export default function Home() {
                 <details className="export-options">
                   <summary>
                     Video options · {portrait ? 'vertical' : 'landscape'},{' '}
-                    {clipLength}s
+                    {clipLength ? `${clipLength}s` : 'full incident'}
                   </summary>
                   <div className="clip-options">
                     <button
@@ -1610,9 +1620,8 @@ export default function Home() {
                         disabled={progress !== null}
                         onChange={(e) => setClipLength(Number(e.target.value))}
                       >
-                        <option value={12}>
-                          12s · the whole regrettable incident
-                        </option>
+                        <option value={0}>Full incident</option>
+                        <option value={12}>12s · extended highlight</option>
                         <option value={10}>10s · impact to punchline</option>
                         <option value={8}>8s · concentrated chaos</option>
                       </select>

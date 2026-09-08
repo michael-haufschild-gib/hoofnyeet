@@ -22,6 +22,7 @@ export function frameGame(
   reduced = false,
   bottomInset = 0,
   topInset?: number,
+  headroom = 120,
 ): CameraFrame {
   const crash = !!s.wreck && ['landing', 'results', 'replay'].includes(s.phase);
   const short = height < 350;
@@ -31,7 +32,8 @@ export function frameGame(
     const stacked = width <= 600 || (width <= 900 && height >= width);
     const zoom = Math.min(
       (width * (stacked ? 0.68 : 0.42)) / 180,
-      (height * (stacked ? (width > 600 ? 0.33 : 0.29) : 0.62)) / 135,
+      (height * (stacked ? (width > 600 ? 0.33 : 0.29) : 0.62)) /
+        Math.max(135, headroom),
       stacked ? 3.4 : 4.6,
     );
     // Centre the pony beside the menu, with its hooves on the track. Anchoring
@@ -46,7 +48,7 @@ export function frameGame(
       y: GROUND_Y - (ground - height * 0.58) / zoom,
       zoom,
       ground,
-      subjectTop: ground - 135 * zoom,
+      subjectTop: ground - Math.max(135, headroom) * zoom,
       safeTop: 0,
     };
   }
@@ -66,17 +68,29 @@ export function frameGame(
         Math.abs(Math.sin(focusBody.angle)) * focusBody.h) /
       2
     : 50;
-  const radiusY = focusBody
+  let radiusY = focusBody
     ? (Math.abs(Math.sin(focusBody.angle)) * focusBody.w +
         Math.abs(Math.cos(focusBody.angle)) * focusBody.h) /
       2
     : 70;
+  if (focusBody && focusBody.id === s.wreck?.headId && headroom > 120)
+    radiusY += 60;
   const afterProp = crash
     ? s.wreck!.bodies.find((body) => body.id === s.wreck!.aftermath?.propId)
     : undefined;
+  const scene = crash
+    ? s.wreck!.carnage?.cues.find((c) => c.kind === 'landing' && c.stage === 0)
+    : undefined;
+  const showScene = scene && Math.abs(scene.x - focusX) < 600;
+  const sceneLeft = showScene
+    ? Math.min(focusX - radiusX, scene.x - 230)
+    : focusX - radiusX;
+  const sceneRight = showScene
+    ? Math.max(focusX + radiusX, scene.x + 240)
+    : focusX + radiusX;
   const subjectTop = Math.min(
-    -110,
-    focusY - (crash ? Math.max(100, radiusY + 30) : 120),
+    showScene ? -250 : -110,
+    focusY - (crash ? Math.max(100, radiusY + 30) : headroom),
     afterProp
       ? afterProp.y - Math.hypot(afterProp.w, afterProp.h) * 0.5 - 20
       : 0,
@@ -91,24 +105,29 @@ export function frameGame(
       ? Math.min(1.15, width / 620)
       : Math.min(1.45, width / 520);
   const available = Math.max(45, ground - safeTop);
-  const targetZoom = Math.min(nominal, available / (GROUND_Y - anticipatedTop));
+  const targetZoom = Math.min(
+    nominal,
+    available / (GROUND_Y - anticipatedTop),
+    showScene ? (width - 36) / (sceneRight - sceneLeft) : Infinity,
+  );
   // Portrait needs room behind the pony for the weather companion and fart
   // plume. Reserve it for the whole flight to avoid panning on every tap.
   const rearPerks =
     portrait &&
     s.phase === 'flight' &&
     (s.equipment.includes('beans') || s.equipment.includes('tailwind'));
-  const targetX =
-    focusX +
-    (s.phase === 'runup'
-      ? portrait
-        ? 85
-        : 160
-      : crash
-        ? 60
-        : rearPerks
-          ? -45
-          : 110);
+  const targetX = showScene
+    ? (sceneLeft + sceneRight) / 2
+    : focusX +
+      (s.phase === 'runup'
+        ? portrait
+          ? 85
+          : 160
+        : crash
+          ? 60
+          : rearPerks
+            ? -45
+            : 110);
   const blend = reduced || !previous ? 1 : 1 - Math.exp(-dt * 5);
   let zoom = previous
     ? previous.zoom + (targetZoom - previous.zoom) * blend

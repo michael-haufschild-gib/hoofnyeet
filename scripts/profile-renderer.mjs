@@ -20,6 +20,7 @@ try {
   const reports = await page.evaluate(async (adaptiveOnly) => {
     const c = window.__hoof;
     c.setExporting(true);
+    await c.renderer.loadWorld('farm');
     cancelAnimationFrame(c.raf);
     const simPath = '/lib/game/simulation.ts';
     const physicsPath = '/lib/game/crash.ts';
@@ -50,7 +51,7 @@ try {
     const crash = new physics.CrashWorld(state);
     const snapshots = [];
     let events = [];
-    for (let tick = 0; tick < 1200; tick++) {
+    for (let tick = 0; tick < 1680; tick++) {
       if ([90, 260, 520].includes(tick)) crash.action('primary');
       if (tick === 310) crash.action('secondary');
       crash.step(1 / 120);

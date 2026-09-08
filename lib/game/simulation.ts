@@ -1,3 +1,4 @@
+import { CRASH_DURATION } from './escalation';
 import { landingTimeline, replayDuration } from './landing-timeline';
 import {
   CONTENT_VERSION,
@@ -7,6 +8,7 @@ import {
   type WorldId,
 } from './content';
 import type { CrashFrame } from './crash';
+import type { PonyOutfit } from './cosmetics';
 export const STEP = 1 / 120;
 export const TRACK = {
   start: 90,
@@ -154,6 +156,7 @@ export interface GameEvent {
     vy: number;
     power: number;
   };
+  carnage?: import('./escalation').CarnageCue;
   sound?: string;
   freeze?: number;
   x: number;
@@ -161,6 +164,8 @@ export interface GameEvent {
   value?: number;
 }
 export interface GameState {
+  /** Present on recorded frames; outfit changes never rewrite earlier footage. */
+  outfit?: PonyOutfit;
   contentVersion?: number;
   world: WorldId;
   equipment: string[];
@@ -389,6 +394,8 @@ export function applyCrashFrame(s: GameState, wreck: CrashFrame) {
   s.bossHits = wreck.bossHits;
   if (!s.failed && Number.isFinite(wreck.focusX))
     s.distance = Math.max(s.distance, (wreck.focusX - TRACK.trampoline) / 10);
+  if (!s.failed && wreck.settled && s.phaseTime >= CRASH_DURATION)
+    phase(s, 'results');
 }
 export function stepGame(s: GameState, dt = STEP) {
   if (s.paused) return;
@@ -518,7 +525,7 @@ export function stepGame(s: GameState, dt = STEP) {
     }
   } else if (s.phase === 'landing') {
     if (s.reactive) {
-      if (s.phaseTime >= (s.failed ? 2.2 : 10)) phase(s, 'results');
+      if (s.failed && s.phaseTime >= 2.2) phase(s, 'results');
       return;
     }
     const timeline = landingTimeline(s.landing);

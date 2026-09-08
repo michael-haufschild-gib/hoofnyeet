@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "test:browser": "playwright test",
+    "optimize:images": "node scripts/optimize-images.mjs",
     "format": "oxfmt"
   },
   "dependencies": {

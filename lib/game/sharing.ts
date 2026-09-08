@@ -1,3 +1,4 @@
+import { INCIDENT_WINDOW } from './escalation';
 import { GameRenderer } from './renderer';
 import { HorseAudio } from './audio';
 import { replayFrame } from './replay';
@@ -152,7 +153,8 @@ export async function exportClip(
         );
     });
     const duration = Math.min(
-        12,
+        INCIDENT_WINDOW,
+        recording.duration,
         Math.max(8, options.duration ?? recording.duration),
       ),
       first = Math.max(

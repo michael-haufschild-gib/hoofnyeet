@@ -3,6 +3,7 @@
 import sharp from 'sharp';
 import fs from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import { masterDirectory, optimizeImages } from './optimize-images.mjs';
 const originals = resolve(
   process.env.HOOF_ASSET_DIR ?? '../hoof-and-yeet-assets',
   'art',
@@ -31,10 +32,10 @@ const dark = {
   jam: [1150, 790, 240, 170],
 };
 const world = JSON.parse(
-  await fs.readFile('public/art/world-props.json', 'utf8'),
+  await fs.readFile('assets/source-art/world-props.json', 'utf8'),
 );
 const equipment = JSON.parse(
-  await fs.readFile('public/art/equipment.json', 'utf8'),
+  await fs.readFile('assets/source-art/equipment.json', 'utf8'),
 );
 const rig = JSON.parse(
   await fs.readFile(
@@ -48,12 +49,15 @@ const rigCrops = Object.fromEntries(
 const materialCrops = JSON.parse(
   await fs.readFile(join(originals, 'materials-crops.json'), 'utf8'),
 );
-const manifest = {};
+// Individually authored expressions and split wings are not atlas cells.
+const manifest = JSON.parse(
+  await fs.readFile('public/art/sprites.json', 'utf8'),
+);
 for (const [path, crops] of [
-  ['public/art/pony-atlas.png', pony],
-  ['public/art/dark-slapstick-atlas.png', dark],
-  ['public/art/world-props-atlas.webp', world],
-  ['public/art/equipment-atlas.webp', equipment],
+  ['assets/source-art/pony-atlas.png', pony],
+  ['assets/source-art/dark-slapstick-atlas.png', dark],
+  ['assets/source-art/world-props-atlas.webp', world],
+  ['assets/source-art/equipment-atlas.webp', equipment],
   [join(originals, 'crash-pony-rig-atlas.png'), rigCrops],
   [join(originals, 'materials-atlas.png'), materialCrops],
 ]) {
@@ -129,11 +133,14 @@ for (const [path, crops] of [
     for (let p = 0; p < mask.length; p++)
       if (!mask[p]) data.fill(0, p * 4, p * 4 + 4);
     const file = `/art/sprites/${id}.webp`;
-    await sharp(data, { raw: { width, height, channels: 4 } })
+    const image = await sharp(data, { raw: { width, height, channels: 4 } })
       .trim({ background: '#00000000', threshold: 1 })
       .extend({ top: 3, bottom: 3, left: 3, right: 3, background: '#00000000' })
       .webp({ quality: 92, alphaQuality: 100 })
-      .toFile('public' + file);
+      .toBuffer();
+    await fs.mkdir(join(masterDirectory, 'sprites'), { recursive: true });
+    await fs.writeFile(join(masterDirectory, `sprites/${id}.webp`), image);
+    await fs.writeFile('public' + file, image);
     manifest[id] = file;
     console.log(id, groups.length, 'components; largest', largest?.count);
   }
@@ -144,3 +151,4 @@ await fs.writeFile(
 );
 // Keep contact geometry in lockstep with the production texture silhouettes.
 await import('./measure-art.mjs');
+await optimizeImages();

@@ -43,6 +43,10 @@ export const PONIES = [
   },
 ] as const;
 export type PonyId = (typeof PONIES)[number]['id'];
+export interface PonyOutfit {
+  hat: Hat;
+  ponyId: PonyId;
+}
 export function ponyUnlocked(
   id: PonyId,
   progress: { rounds: number; wins: number },

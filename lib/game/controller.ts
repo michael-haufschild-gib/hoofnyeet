@@ -1,3 +1,4 @@
+import { INCIDENT_WINDOW } from './escalation';
 import {
   act,
   applyCrashFrame,
@@ -155,10 +156,8 @@ export class GameController {
     this.audio.effects = this.save.effects;
     this.renderer.reduced = this.save.reduced;
     this.renderer.gentle = this.save.gentle;
-    if (this.screen !== 'game' && this.screen !== 'results') {
-      this.renderer.hat = this.save.hat;
-      this.renderer.ponyId = this.save.pony;
-    }
+    this.renderer.hat = this.save.hat;
+    this.renderer.ponyId = this.save.pony;
     this.renderer.best = this.save.best;
   }
   setPreference<
@@ -363,8 +362,10 @@ export class GameController {
     }
     if (this.screen !== 'game') return;
     void this.audio.unlock();
-    if (this.state.phase === 'landing' && this.crash) this.crash.action(action);
-    else act(this.state, action, repeated);
+    if (this.state.phase === 'landing' && this.crash) {
+      this.crash.action(action);
+      applyCrashFrame(this.state, this.crash.snapshot());
+    } else act(this.state, action, repeated);
     this.drainEvents();
     this.publish();
   }
@@ -517,6 +518,7 @@ export class GameController {
     if (last) {
       this.frames.push({
         ...this.state,
+        outfit: { hat: this.renderer.hat, ponyId: this.renderer.ponyId },
         phase: 'landing',
         phaseTime:
           last.phaseTime +
@@ -526,7 +528,7 @@ export class GameController {
         events: [],
         rings: [...this.state.rings],
       });
-      if (this.frames.length > 1440) this.frames.shift();
+      if (this.frames.length > 2400) this.frames.shift();
     }
     this.newBest = this.state.distance > this.save.best;
     const next = finishRound(this.save, this.state);
@@ -650,6 +652,7 @@ export class GameController {
         ) {
           this.frames.push({
             ...this.state,
+            outfit: { hat: this.renderer.hat, ponyId: this.renderer.ponyId },
             time: this.recordTime,
             sceneTime: this.state.time,
             events: [],
@@ -657,10 +660,10 @@ export class GameController {
           });
           while (
             this.frames.length > 1 &&
-            this.frames[1].time < this.recordTime - 12
+            this.frames[1].time < this.recordTime - INCIDENT_WINDOW
           )
             this.frames.shift();
-          if (this.frames.length > 1440) this.frames.shift();
+          if (this.frames.length > 2400) this.frames.shift();
         }
       });
     if (this.state.phase !== 'replay') this.drainEvents();

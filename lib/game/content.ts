@@ -1,4 +1,4 @@
-export const CONTENT_VERSION = 4;
+export const CONTENT_VERSION = 5;
 export type WorldId =
   | 'farm'
   | 'candy'

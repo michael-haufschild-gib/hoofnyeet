@@ -116,3 +116,26 @@ void test('recorded simulation time interpolates separately and stops throughout
   );
   assert.equal(a.sceneTime, 8);
 });
+
+void test('outfit changes stay on their recorded frame boundary and preserve older recordings', () => {
+  const before = {
+    ...createGame(),
+    phase: 'flight' as const,
+    time: 1,
+    outfit: { hat: 'space' as const, ponyId: 'buttercup' as const },
+  };
+  const after = {
+    ...before,
+    time: 2,
+    outfit: { hat: 'party' as const, ponyId: 'bubblegum' as const },
+  };
+  const recorded = JSON.stringify([before, after]);
+  assert.deepEqual(replayFrame([before, after], 1.99).outfit, before.outfit);
+  assert.deepEqual(replayFrame([before, after], 2).outfit, after.outfit);
+  assert.equal(JSON.stringify([before, after]), recorded);
+  const legacy = { ...createGame(), phase: 'flight' as const, time: 1 };
+  assert.equal(
+    replayFrame([legacy, { ...legacy, time: 2 }], 1.5).outfit,
+    undefined,
+  );
+});

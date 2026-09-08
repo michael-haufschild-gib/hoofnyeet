@@ -9,7 +9,7 @@ test('every catastrophe and synergy has clean, bounded illustrated frames', asyn
   page,
 }, info) => {
   test.skip(info.project.name !== 'chromium');
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
@@ -50,7 +50,7 @@ test('every catastrophe and synergy has clean, bounded illustrated frames', asyn
         });
         const crash = new physics.CrashWorld(s);
         renderer.reset();
-        for (let i = 0; i < 1080; i++) {
+        for (let i = 0; i < 1680; i++) {
           if ([90, 260, 520].includes(i)) crash.action('primary');
           if (i === 310) crash.action('secondary');
           crash.step(1 / 120);
@@ -58,7 +58,7 @@ test('every catastrophe and synergy has clean, bounded illustrated frames', asyn
           s.wreck = crash.snapshot();
           for (const event of crash.drain()) renderer.event(event);
           if (i % 12 === 0) renderer.draw(s, 1 / 10, s.time);
-          if ([198, 530, 950].includes(i))
+          if ([198, 530, 950, 1572].includes(i))
             captures.push({
               id: `${world.id}-${d}-${i}`,
               url: c.renderer.canvas.toDataURL('image/webp', 0.85),
@@ -103,13 +103,13 @@ test('every catastrophe and synergy has clean, bounded illustrated frames', asyn
       });
       const crash = new physics.CrashWorld(s);
       renderer.reset();
-      for (let tick = 0; tick < 1180; tick++) {
+      for (let tick = 0; tick < 1680; tick++) {
         crash.step(1 / 120);
         s.time = tick / 120;
         s.wreck = crash.snapshot();
         for (const event of crash.drain()) renderer.event(event);
         if (tick % 6 === 0) renderer.draw(s, 1 / 20, s.time);
-        if ([550, 925, 1150].includes(tick))
+        if ([550, 925, 1150, 1572].includes(tick))
           captures.push({
             id: `ending-${landing}-${tick}`,
             url: renderer.canvas.toDataURL('image/webp', 0.9),
@@ -148,6 +148,6 @@ test('every catastrophe and synergy has clean, bounded illustrated frames', asyn
       fullPage: true,
     });
   }
-  expect(captures).toHaveLength(104);
+  expect(captures).toHaveLength(136);
   expect(errors).toEqual([]);
 });

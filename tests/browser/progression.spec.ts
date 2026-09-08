@@ -104,8 +104,8 @@ test('changing an outfit cannot rewrite the incident being recorded', async ({
   });
   expect(looks.recording?.ponyId).toBe('buttercup');
   expect(looks.recording?.hat).toBe('helmet');
-  expect(looks.pony).toBe('buttercup');
-  expect(looks.hat).toBe('helmet');
+  expect(looks.pony).toBe('bubblegum');
+  expect(looks.hat).toBe('party');
   expect(looks.next).toBe('bubblegum');
   await returnHome(page);
   await page.getByRole('button', { name: 'Quick play', exact: true }).click();

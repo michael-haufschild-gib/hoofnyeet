@@ -1,3 +1,17 @@
+import {
+  CRASH_DURATION,
+  CRASH_SETTLE_SECONDS,
+  ESCALATION_AT,
+  ESCALATION_BEATS,
+  LANDING_SOUNDS,
+  BOSS_SOUNDS,
+  visualSeed,
+  queueGrabAction,
+  type CarnageCue,
+  type CarnageFrame,
+  type GrabState,
+} from './escalation';
+import { worldById } from './content';
 import RAPIER from '@dimforge/rapier2d-compat';
 import {
   GROUND_Y,
@@ -24,8 +38,14 @@ export interface BodyPose {
   tint: number;
   alpha: number;
   boss: boolean;
+  injury?: number;
+  charred?: boolean;
 }
 export interface CrashFrame {
+  settled?: boolean;
+  /** Stable attachment socket, retained when the head separates or changes expression. */
+  headId?: number;
+  carnage?: CarnageFrame;
   bodies: BodyPose[];
   time: number;
   kicks: number;
@@ -59,6 +79,9 @@ interface Piece {
   activated: boolean;
   impactSpeed: number;
   detonateAt?: number;
+  protected?: boolean;
+  injury?: number;
+  charred?: boolean;
   afterRole?: 'first' | 'surprise' | 'vehicle';
 }
 let initPromise: Promise<void> | undefined;
@@ -83,9 +106,21 @@ export class CrashWorld {
   private afterProp: Piece | null = null;
   private afterAnchor = 0;
   private laundryJoint: RAPIER.ImpulseJoint | null = null;
+  private laundry: Piece | undefined;
   private verdictUntil = 0;
   private elapsed = 0;
+  private carnage: CarnageCue[] = [];
+  private lastGore = -1;
+  private grab: GrabState | undefined;
+  private grabJoint: RAPIER.ImpulseJoint | undefined;
+  private grabCandidate: Piece | undefined;
+  private pendingActions: Action[] = [];
+  private escalationProp: Piece | undefined;
   private abilityAt = -10;
+  private boostUntil = -1;
+  private boostSpeed = 0;
+  private springSpeed = 0;
+  private quietTime = 0;
   private kickAt = -10;
   private serial = 0;
   private rng: () => number;
@@ -109,10 +144,12 @@ export class CrashWorld {
     this.world = new RAPIER.World({ x: 0, y: 11 * s.mod.gravity });
     this.world.timestep = 1 / 120;
     const ground = this.world.createRigidBody(
-      RAPIER.RigidBodyDesc.fixed().setTranslation(0, GROUND_Y / SCALE + 0.35),
+      RAPIER.RigidBodyDesc.fixed().setTranslation(0, GROUND_Y / SCALE + 50),
     );
     this.world.createCollider(
-      RAPIER.ColliderDesc.cuboid(150, 0.35).setFriction(0.55),
+      // Keep the same visible surface, with depth for joint corrections and
+      // high-speed impacts to resolve into instead of crossing a thin slab.
+      RAPIER.ColliderDesc.cuboid(1500, 50).setFriction(0.55),
       ground,
     );
     const vx = Math.max(3, Math.min(19, s.vx / SCALE)),
@@ -274,6 +311,8 @@ export class CrashWorld {
         (p) =>
           !p.horse &&
           !p.boss &&
+          !p.protected &&
+          !p.afterRole &&
           p.body !== this.controlled &&
           p !== this.afterProp &&
           !this.mechanismBodies.some(({ piece }) => piece === p),
@@ -368,6 +407,8 @@ export class CrashWorld {
     });
   }
   private burst(x: number, y: number, power = 10) {
+    const focus = this.controlled.translation();
+    const reach = Math.hypot(focus.x - x / SCALE, focus.y - y / SCALE);
     for (const p of this.pieces.values()) {
       if (p.boss) continue;
       const v = p.body.translation(),
@@ -377,6 +418,7 @@ export class CrashWorld {
       if (len < 11) {
         p.activated = true;
         this.ignite(p, 0.12 + len * 0.018);
+        if (p.body === this.controlled || (!this.broken && p.horse)) continue;
         p.body.applyImpulse(
           {
             x: ((dx / len) * power) / (1 + len * 0.2),
@@ -386,8 +428,56 @@ export class CrashWorld {
         );
       }
     }
+    // Scenery scatters radially; the playable wreck rides the blast down-track.
+    // A blast at its own centre must still provide horizontal propulsion.
+    if (reach < 11)
+      this.propel((5 + power * 0.45) / (1 + reach * 0.15), 7 + power * 0.2);
+    this.gore('ignite', x, y, Math.min(2.2, power / 9));
+    for (const p of this.pieces.values())
+      if (
+        p.horse &&
+        Math.hypot(
+          p.body.translation().x * SCALE - x,
+          p.body.translation().y * SCALE - y,
+        ) < 190
+      )
+        p.charred = true;
+    if (this.has('confetti')) this.gore('confetti', x, y, 1.5);
     this.flash = 1;
     this.emit('explosion', x, y, 0.8, 0.065);
+  }
+  private propel(forward: number, lift: number, minimumSpeed = 0) {
+    this.quietTime = 0;
+    const v = this.controlled.linvel();
+    const velocity = {
+      x: Math.min(32, Math.max(minimumSpeed, Math.max(0, v.x) + forward)),
+      y: Math.max(
+        -16 * Math.sqrt(this.s.mod.gravity),
+        Math.min(v.y, -lift * Math.sqrt(this.s.mod.gravity)),
+      ),
+    };
+    // Delta velocity makes a kick useful even when possessing a heavy machine.
+    // Carry the connected rig together so its joints do not swallow the boost.
+    for (const body of this.connectedBodies().values())
+      body.setLinvel(velocity, true);
+    this.boostSpeed = Math.max(
+      this.elapsed < this.boostUntil ? this.boostSpeed : 0,
+      velocity.x * 0.7,
+    );
+    this.boostUntil = (this.grab?.until ?? this.elapsed) + 0.65;
+  }
+  private recoverMomentum() {
+    if (this.grab || this.elapsed >= this.boostUntil) return;
+    const v = this.controlled.linvel();
+    const minimum =
+      this.boostSpeed * Math.min(1, (this.boostUntil - this.elapsed) / 0.65);
+    if (v.x >= minimum) return;
+    // Briefly turn pile-up recoil into a forward hop. This expires, costs no
+    // extra action, and never moves a body or adds distance outside physics.
+    this.controlled.setLinvel(
+      { x: minimum, y: Math.min(v.y, -4 * Math.sqrt(this.s.mod.gravity)) },
+      true,
+    );
   }
   private explosive(p: Piece) {
     return (
@@ -413,6 +503,7 @@ export class CrashWorld {
     if (this.controlled === p.body) {
       this.controlled = this.head;
       this.head.setTranslation(position, true);
+      this.head.setLinvel(p.body.linvel(), true);
     }
     for (const [handle, piece] of this.colliders)
       if (piece === p) this.colliders.delete(handle);
@@ -437,6 +528,9 @@ export class CrashWorld {
   private disassemble() {
     if (this.broken) return;
     this.broken = true;
+    const at = this.controlled.translation();
+    this.gore('impact', at.x * SCALE, at.y * SCALE, 2, this.controlled.handle);
+    for (const piece of this.pieces.values()) if (piece.horse) piece.injury = 2;
     for (const j of this.joints) this.world.removeImpulseJoint(j, true);
     this.joints = [];
     const torso = this.pieces.get(this.torso.handle);
@@ -465,16 +559,25 @@ export class CrashWorld {
           );
         }
       if (this.s.landing === 'accordion') {
-        this.torso.setLinvel({ x: 12, y: -15 }, true);
+        this.torso.setLinvel(
+          { x: Math.max(12, this.torso.linvel().x), y: -15 },
+          true,
+        );
         this.caption = 'YOUR SPINE HAS FILED FOR SEPARATION.';
       }
       if (this.s.landing === 'mud') {
-        this.torso.setLinvel({ x: 25, y: 0 }, true);
+        this.torso.setLinvel(
+          { x: Math.max(25, this.torso.linvel().x), y: 0 },
+          true,
+        );
         for (let i = 0; i < 5; i++) this.spawn('jam', i * 45, 18, 95, 15);
       }
       if (this.s.landing === 'ballet') {
         this.torso.setAngvel(9, true);
-        this.torso.setLinvel({ x: 4, y: -8 }, true);
+        this.torso.setLinvel(
+          { x: Math.max(4, this.torso.linvel().x), y: -8 },
+          true,
+        );
       }
       if (this.s.landing === 'sheep') {
         for (let i = 0; i < 3; i++) {
@@ -516,24 +619,31 @@ export class CrashWorld {
     }
   }
   action(action: Action) {
-    if (this.elapsed > 9.4) return;
+    if (this.settled) return;
+    if (this.grab) {
+      queueGrabAction(this.grab, action, this.kicks, this.abilityReady);
+      return;
+    }
     if (
       action === 'primary' &&
       this.kicks > 0 &&
       this.elapsed - this.kickAt > 0.35
     ) {
       this.kicks--;
+      this.quietTime = 0;
       this.kickAt = this.elapsed;
-      this.controlled.applyImpulse(
-        { x: 10 * this.s.mod.kick, y: -15 * this.s.mod.kick },
-        true,
-      );
+      this.propel(8 * this.s.mod.kick, 10 * this.s.mod.kick);
       this.controlled.setAngvel(-5, true);
       this.emit('kick');
+      if (this.has('beans')) {
+        const p = this.controlled.translation();
+        this.gore('ignite', p.x * SCALE - 30, p.y * SCALE, 1.2);
+      }
       this.caption = 'A STRONG ARGUMENT AGAINST GRAVITY.';
     }
     if (action !== 'secondary' || !this.abilityReady) return;
     this.abilityReady = false;
+    this.quietTime = 0;
     this.abilityAt = this.elapsed;
     const pos = this.controlled.translation(),
       x = pos.x * SCALE,
@@ -542,36 +652,62 @@ export class CrashWorld {
       case 'eject':
         this.disassemble();
         this.controlled = this.head;
-        this.head.setLinvel({ x: 25, y: -17 }, true);
+        {
+          const head = this.head.translation();
+          const dx = Math.max(pos.x, head.x) - head.x;
+          const dy = pos.y - 0.8 - head.y;
+          // Carry attached headwear too; an old crown joint otherwise drags
+          // the ejected head all the way back to its previous resting place.
+          for (const body of this.connectedBodies().values()) {
+            const at = body.translation();
+            body.setTranslation({ x: at.x + dx, y: at.y + dy }, true);
+          }
+        }
+        this.propel(8, 16, 25);
         this.caption = 'FORWARD ALL MAIL TO MY HEAD.';
         this.emit('eject');
         break;
       case 'honk':
         for (const p of this.pieces.values())
-          if (!p.boss) {
+          if (!p.boss && p.body !== this.controlled) {
             p.activated = true;
             p.body.applyImpulse({ x: 22, y: -4 }, true);
           }
+        this.propel(12, 6);
         this.caption = 'HONK IF YOU REQUIRE MEDICAL ATTENTION.';
         this.emit('honk');
         this.flash = 0.5;
         break;
       case 'ghost': {
         const target = [...this.pieces.values()]
-          .filter((p) => !p.horse && !p.boss)
-          .sort(
-            (a, b) =>
-              Math.abs(a.body.translation().x - pos.x) -
-              Math.abs(b.body.translation().x - pos.x),
-          )[0];
+          .filter(
+            (p) =>
+              !p.horse &&
+              !p.boss &&
+              p.body.isDynamic() &&
+              Math.hypot(
+                p.body.translation().x - pos.x,
+                p.body.translation().y - pos.y,
+              ) < 15,
+          )
+          .sort((a, b) => {
+            const distance = (piece: Piece) => {
+              const at = piece.body.translation();
+              return (
+                Math.hypot(at.x - pos.x, at.y - pos.y) +
+                (at.x < pos.x - 1 ? 15 : 0)
+              );
+            };
+            return distance(a) - distance(b);
+          })[0];
         if (target) {
           this.controlled = target.body;
           target.activated = true;
           target.tint = 0x91fff0;
-          target.body.setLinvel(
-            { x: this.has('ghostly') ? 25 : 18, y: -16 },
-            true,
-          );
+          this.propel(8, 14, this.has('ghostly') ? 25 : 18);
+        } else {
+          this.controlled = this.spawn('ghost', x, y, 80, 100, true).body;
+          this.propel(8, 14, 18);
         }
         this.spawn('ghost', x, y - 100, 80, 100, true);
         this.caption = 'NEW BODY. SAME TERRIBLE DRIVER.';
@@ -583,7 +719,8 @@ export class CrashWorld {
         this.emit('blackhole');
         break;
       case 'spring':
-        this.controlled.setLinvel({ x: 2, y: 0 }, true);
+        this.springSpeed = Math.max(0, this.controlled.linvel().x);
+        this.controlled.setLinvel({ x: this.springSpeed * 0.6, y: 0 }, true);
         this.caption = 'YOUR SPINE IS BUFFERING…';
         break;
       case 'dynamite':
@@ -675,7 +812,10 @@ export class CrashWorld {
           this.reskin(hero, 'cube', 105, 75);
           this.appendage(hero.body, 'straightLeg', -24, 38, 15, 30);
           this.appendage(hero.body, 'straightLeg', 24, 38, 15, 30);
-          hero.body.setLinvel({ x: 13, y: -2 }, true);
+          hero.body.setLinvel(
+            { x: Math.max(13, hero.body.linvel().x), y: -2 },
+            true,
+          );
           break;
         case 'mud':
           this.rescue();
@@ -717,13 +857,12 @@ export class CrashWorld {
             );
             pole.body.setBodyType(RAPIER.RigidBodyType.Fixed, true);
           }
-          this.reskin(hero, 'torso', 105, 75);
-          hero.body.setRotation(Math.PI / 2, true);
-          hero.body.setTranslation(
-            { x: this.afterAnchor / SCALE, y: -78 / SCALE },
-            true,
-          );
-          hero.body.setLinvel({ x: 0, y: 0 }, true);
+          // The discarded suit takes the clothespin. Keep the player's wreck
+          // where physics put it, including if it has escaped high overhead.
+          const laundry = this.spawn('torso', this.afterAnchor, -78, 105, 75);
+          laundry.protected = true;
+          laundry.body.setRotation(Math.PI / 2, true);
+          this.laundry = laundry;
           const peg = this.world.createRigidBody(
             RAPIER.RigidBodyDesc.fixed().setTranslation(
               this.afterAnchor / SCALE,
@@ -732,7 +871,7 @@ export class CrashWorld {
           );
           this.laundryJoint = this.connect(
             peg,
-            hero.body,
+            laundry.body,
             { x: 0, y: 0 },
             { x: -50, y: 0 },
           );
@@ -753,13 +892,22 @@ export class CrashWorld {
           this.emit('sheep');
           break;
         }
-        case 'ballet':
-          this.controlled = this.head;
-          this.head.setLinvel({ x: 3, y: -7 }, true);
+        case 'ballet': {
+          const head = this.head.translation(),
+            focus = this.controlled.translation();
+          // A nearby head can take the bow; a distant head is an independent
+          // performer, never a forced camera/control jump back to the wreck.
+          if (Math.hypot(head.x - focus.x, head.y - focus.y) * SCALE < 140)
+            this.controlled = this.head;
+          this.head.setLinvel(
+            { x: Math.max(3, this.head.linvel().x), y: -7 },
+            true,
+          );
           this.head.setAngvel(0.4, true);
           this.appendage(this.head, 'crown', 0, -47, 44, 32, true);
           this.emit('fanfare');
           break;
+        }
         case 'dignified':
           this.appendage(this.head, 'crown', 0, -47, 44, 32, true);
           this.emit('fanfare');
@@ -774,7 +922,11 @@ export class CrashWorld {
     ) {
       const center = this.afterProp.body.translation();
       for (const piece of this.pieces.values())
-        if (piece.horse) {
+        if (
+          piece.horse &&
+          (piece.body !== this.controlled ||
+            (this.elapsed >= this.boostUntil && piece.body.linvel().x < 4))
+        ) {
           const p = piece.body.translation(),
             v = piece.body.linvel();
           if (Math.abs(p.x - center.x) > 13) continue;
@@ -813,7 +965,7 @@ export class CrashWorld {
             this.world.removeImpulseJoint(this.laundryJoint, true);
             this.laundryJoint = null;
           }
-          this.controlled.setLinvel({ x: 11, y: -3 }, true);
+          this.laundry?.body.setLinvel({ x: 11, y: -3 }, true);
           this.rescue();
           this.announce(script.verdict);
           break;
@@ -844,7 +996,10 @@ export class CrashWorld {
             115,
             true,
           );
-          ghost.body.setLinvel({ x: 1, y: -9 }, true);
+          ghost.body.setLinvel(
+            { x: Math.max(1, this.controlled.linvel().x), y: -9 },
+            true,
+          );
           ghost.body.setGravityScale(-0.1, true);
           this.controlled = ghost.body;
           this.afterProp = ghost;
@@ -890,8 +1045,198 @@ export class CrashWorld {
       0.065,
     );
   }
+  private gore(
+    kind: CarnageCue['kind'],
+    x: number,
+    y: number,
+    power: number,
+    bodyId?: number,
+    propId?: number,
+  ): CarnageCue {
+    const id = `${this.s.round}-carnage-${this.serial++}`;
+    const cue: CarnageCue = {
+      id,
+      kind,
+      at: this.elapsed,
+      x: this.origin + x,
+      y,
+      seed: visualSeed(`${this.s.seed}:${id}`),
+      power,
+      bodyId,
+      propId,
+      world: this.s.world,
+    };
+    this.carnage.push(cue);
+    // Significant scenes remain; only the oldest decorative contact is retired.
+    if (this.carnage.length > 80) {
+      const index = this.carnage.findIndex((c) =>
+        ['impact', 'ignite', 'confetti', 'release', 'grab'].includes(c.kind),
+      );
+      if (index >= 0) this.carnage.splice(index, 1);
+    }
+    return cue;
+  }
+  private cueSound(cue: CarnageCue, sound: string, freeze = 0) {
+    this.emit(
+      sound,
+      cue.x - this.origin,
+      cue.y,
+      Math.min(0.9, cue.power),
+      freeze,
+    );
+    this.events[this.events.length - 1].carnage = { ...cue };
+  }
+  private contactGore(piece: Piece, force: number) {
+    if (!piece.horse || force < 2.5 || this.elapsed - this.lastGore < 0.16)
+      return;
+    this.lastGore = this.elapsed;
+    piece.injury = Math.min(3, (piece.injury ?? 0) + 1);
+    const p = piece.body.translation();
+    const cue = this.gore(
+      'impact',
+      p.x * SCALE,
+      p.y * SCALE,
+      Math.min(2.2, force / 8),
+      piece.body.handle,
+    );
+    this.cueSound(cue, force > 12 ? 'blood-bag' : 'bone-pop');
+  }
+  private beginGrab(prop: Piece) {
+    if (
+      this.grab ||
+      this.elapsed < this.boostUntil ||
+      this.elapsed > 12 ||
+      this.elapsed < 0.3 ||
+      !this.pieces.has(prop.body.handle)
+    )
+      return;
+    const key = `grab-${prop.body.handle}`;
+    if (this.beats.has(key)) return;
+    this.beats.add(key);
+    const p = prop.body.translation(),
+      c = this.controlled.translation();
+    if (
+      Math.hypot(p.x - c.x, p.y - c.y) * SCALE >
+      Math.hypot(prop.w, prop.h) / 2 + 85
+    )
+      return;
+    const angle = -prop.body.rotation(),
+      dx = c.x - p.x,
+      dy = c.y - p.y;
+    const joint = RAPIER.JointData.revolute(
+      {
+        x: dx * Math.cos(angle) - dy * Math.sin(angle),
+        y: dx * Math.sin(angle) + dy * Math.cos(angle),
+      },
+      { x: 0, y: 0 },
+    );
+    this.grabJoint = this.world.createImpulseJoint(
+      joint,
+      prop.body,
+      this.controlled,
+      true,
+    );
+    this.grabJoint.setContactsEnabled(false);
+    this.grab = {
+      bodyId: this.controlled.handle,
+      propId: prop.body.handle,
+      at: this.elapsed,
+      until: this.elapsed + 0.85,
+      queued: [],
+    };
+    this.cueSound(
+      this.gore(
+        'grab',
+        c.x * SCALE,
+        c.y * SCALE,
+        0.6,
+        this.controlled.handle,
+        prop.body.handle,
+      ),
+      'tissue-stretch',
+    );
+  }
+  private updateGrab() {
+    if (
+      this.grab &&
+      (this.elapsed >= this.grab.until || !this.pieces.has(this.grab.propId))
+    ) {
+      if (this.grabJoint?.isValid())
+        this.world.removeImpulseJoint(this.grabJoint, true);
+      this.grabJoint = undefined;
+      this.pendingActions.push(...this.grab.queued);
+      const p = this.controlled.translation();
+      this.gore(
+        'release',
+        p.x * SCALE,
+        p.y * SCALE,
+        1.2,
+        this.controlled.handle,
+      );
+      this.grab = undefined;
+      this.propel(8, 7);
+    }
+    if (
+      !this.grab &&
+      this.pendingActions.length &&
+      (this.pendingActions[0] !== 'primary' ||
+        this.elapsed - this.kickAt > 0.35)
+    )
+      this.action(this.pendingActions.shift()!);
+  }
+  private escalate() {
+    for (const [stage, delay] of ESCALATION_BEATS.entries()) {
+      this.beat(`escalation-${stage}`, ESCALATION_AT + delay, () => {
+        const at = this.controlled.translation();
+        let origin = this.carnage.find((c) => c.kind === 'landing');
+        if (!origin) {
+          origin = this.gore(
+            'landing',
+            at.x * SCALE,
+            Math.min(-70, at.y * SCALE),
+            1,
+            this.controlled.handle,
+            this.afterProp?.body.handle,
+          );
+          origin.landing = this.s.landing;
+        }
+        // Stage cue captures the physical location on its own tick. It never
+        // moves an escaped player back to the scripted scene.
+        const cue =
+          stage === 0
+            ? origin
+            : this.gore(
+                'landing',
+                origin.x - this.origin,
+                origin.y,
+                1,
+                origin.bodyId,
+                origin.propId,
+              );
+        cue.landing = this.s.landing;
+        cue.stage = stage;
+        this.cueSound(
+          cue,
+          LANDING_SOUNDS[this.s.landing][stage],
+          stage === 2 ? 0.04 : 0,
+        );
+        if (stage === 2) {
+          this.gore('impact', cue.x - this.origin, cue.y, 2.1, cue.bodyId);
+          if (this.s.landing === 'cartwheel') {
+            this.fallingPunchline('piano', 215, 210, 'surprise');
+            this.escalationProp = this.afterProp ?? undefined;
+            if (this.escalationProp) {
+              this.escalationProp.protected = true;
+              cue.propId = this.escalationProp.body.handle;
+            }
+          }
+        }
+      });
+    }
+  }
   step(dt: number) {
     this.elapsed += dt;
+    this.updateGrab();
     this.flash = Math.max(0, this.flash - dt * 3);
     this.beat('disassembly', this.has('loose') ? 0.2 : 1.1, () => {
       this.disassemble();
@@ -929,7 +1274,7 @@ export class CrashWorld {
       }
     });
     for (const { piece: trap, anchorX, startedAt } of this.mechanismBodies) {
-      const age = this.elapsed - startedAt,
+      const age = Math.min(this.elapsed, CRASH_DURATION) - startedAt,
         pos = trap.body.translation();
       if (drivenMechanisms.includes(spec.mechanism)) {
         const at = mechanismPose(spec.mechanism, age, anchorX, trap);
@@ -942,13 +1287,22 @@ export class CrashWorld {
       switch (spec.mechanism) {
         case 'tractor':
           for (const p of this.pieces.values())
-            if (p.horse) p.body.applyImpulse({ x: 0, y: -dt * 12 }, true);
+            if (p.horse && this.elapsed < CRASH_DURATION)
+              p.body.applyImpulse({ x: 0, y: -dt * 12 }, true);
           break;
         case 'portal':
           if (age > 0.6 && !this.beats.has('portal-warp')) {
             this.beats.add('portal-warp');
-            this.controlled.setTranslation({ x: 7, y: -8 }, true);
-            this.controlled.setLinvel({ x: 12, y: 5 }, true);
+            const player = this.controlled.translation();
+            // Portals catch only nearby bodies and release them ahead of entry.
+            // The old fixed destination pulled escaped players back to the start.
+            if (Math.hypot(player.x - pos.x, player.y - pos.y) < 6) {
+              this.controlled.setTranslation(
+                { x: player.x + 4, y: player.y - 2 },
+                true,
+              );
+              this.propel(8, 6, 16);
+            }
             this.emit('ufo');
           }
           break;
@@ -967,10 +1321,7 @@ export class CrashWorld {
       !this.beats.has('spring-release')
     ) {
       this.beats.add('spring-release');
-      this.controlled.setLinvel(
-        { x: 24, y: -15 * Math.sqrt(this.s.mod.gravity) },
-        true,
-      );
+      this.propel(8, 15, Math.max(24, this.springSpeed));
       this.caption = 'SPINAL TAP. THE SEQUEL.';
       this.emit('rebound', undefined, undefined, 0.9, 0.04);
     }
@@ -992,8 +1343,11 @@ export class CrashWorld {
       this.burst(at.x * SCALE, at.y * SCALE, 15);
     });
     this.aftermath(dt);
+    this.escalate();
     if (
-      this.has('magnet') ||
+      (this.has('magnet') &&
+        (this.elapsed < CRASH_DURATION ||
+          Math.abs(this.controlled.linvel().x) > 1)) ||
       (this.s.ability === 'blackhole' && this.elapsed - this.abilityAt < 1)
     ) {
       const center = this.controlled.translation();
@@ -1023,15 +1377,23 @@ export class CrashWorld {
     }
     for (const p of this.pieces.values())
       if (p.boss) {
-        const t = this.elapsed;
+        const t = Math.min(this.elapsed, CRASH_DURATION);
         const at = bossPose(this.s.world, t, p);
         p.body.setNextKinematicTranslation({
           x: at.x / SCALE,
           y: at.y / SCALE,
         });
-        if (this.s.world === 'moon' || this.s.world === 'farm')
+        if (
+          this.elapsed < CRASH_DURATION &&
+          (this.s.world === 'moon' || this.s.world === 'farm')
+        )
           for (const part of this.pieces.values()) {
-            if (!part.activated || part.boss) continue;
+            if (
+              !part.activated ||
+              part.boss ||
+              (part.body === this.controlled && this.elapsed < this.boostUntil)
+            )
+              continue;
             const q = part.body.translation(),
               dx = at.x / SCALE - q.x;
             if (Math.abs(dx) < 6)
@@ -1062,7 +1424,7 @@ export class CrashWorld {
     // A chain of simultaneous blasts must remain readable and playable. This
     // limits character knockback, while loose scenery keeps its full impulse.
     for (const piece of this.pieces.values())
-      if (piece.horse) {
+      if (piece.horse || piece.body === this.controlled) {
         const v = piece.body.linvel();
         const ceiling = -16 * Math.sqrt(this.s.mod.gravity);
         if (v.y < ceiling || Math.abs(v.x) > 32)
@@ -1087,9 +1449,22 @@ export class CrashWorld {
       if (!pa || !pb) {
         const piece = pa ?? pb;
         if (piece?.activated && speed(piece) > 1.5) this.ignite(piece);
+        if (piece) this.contactGore(piece, speed(piece));
         return;
       }
       this.aftermathContact(pa, pb);
+      this.contactGore(pa, Math.max(speed(pa), speed(pb)));
+      this.contactGore(pb, Math.max(speed(pa), speed(pb)));
+      const machine = this.mechanismBodies.find(
+        ({ piece }) => piece === pa || piece === pb,
+      )?.piece;
+      if (
+        machine &&
+        (pa.body === this.controlled || pb.body === this.controlled) &&
+        ['press', 'chomp', 'roller', 'shredder'].includes(spec.mechanism) &&
+        this.elapsed < 3
+      )
+        this.grabCandidate = machine;
       const ghost =
         pa.part === 'ghost-head' ? pa : pb.part === 'ghost-head' ? pb : null;
       const helmet =
@@ -1169,6 +1544,21 @@ export class CrashWorld {
         if (!this.bossPairs.has(key)) {
           this.bossPairs.add(key);
           this.bossHits++;
+          if (
+            this.bossHits >= 3 + worldById(this.s.world).act * 2 &&
+            !this.beats.has('boss-carnage')
+          ) {
+            this.beats.add('boss-carnage');
+            const p = boss.body.translation();
+            const cue = this.gore(
+              'boss',
+              p.x * SCALE,
+              p.y * SCALE,
+              2,
+              boss.body.handle,
+            );
+            this.cueSound(cue, BOSS_SOUNDS[this.s.world], 0.06);
+          }
           this.havoc += 120;
           boss.tint = 0xffa2ac;
           this.flash = 0.5;
@@ -1196,14 +1586,77 @@ export class CrashWorld {
       if (b) this.ignite(b);
     });
     if (this.contactBreak && !this.broken) this.disassemble();
+    if (this.grabCandidate) {
+      this.beginGrab(this.grabCandidate);
+      this.grabCandidate = undefined;
+    }
     // Remove consumed bodies only after both Rapier event queues are drained.
     for (const p of this.pieces.values())
       if (p.detonateAt !== undefined && this.elapsed >= p.detonateAt)
         this.detonate(p);
+    this.recoverMomentum();
+    // A missed falling helmet must not leave the playable soul ascending forever.
+    if (this.elapsed >= CRASH_DURATION && this.controlled.gravityScale() < 0)
+      this.controlled.setGravityScale(1, true);
+    this.updateSettlement(dt);
+  }
+  private get settled() {
+    return (
+      this.elapsed >= CRASH_DURATION && this.quietTime >= CRASH_SETTLE_SECONDS
+    );
+  }
+  private connectedBodies() {
+    const connected = new Map([[this.controlled.handle, this.controlled]]);
+    for (const body of connected.values())
+      this.world.impulseJoints.forEachJointHandleAttachedToRigidBody(
+        body.handle,
+        (handle) => {
+          if (handle === this.grabJoint?.handle) return;
+          const joint = this.world.impulseJoints.get(handle);
+          if (!joint) return;
+          for (const part of [joint.body1(), joint.body2()])
+            connected.set(part.handle, part);
+        },
+      );
+    return connected;
+  }
+  private updateSettlement(dt: number) {
+    const v = this.controlled.linvel();
+    const pendingAbility =
+      this.abilityAt >= 0 &&
+      ((this.s.ability === 'spring' && !this.beats.has('spring-release')) ||
+        (this.s.ability === 'blackhole' &&
+          !this.beats.has('blackhole-release')));
+    let supported = false;
+    if (
+      !this.grab &&
+      !this.pendingActions.length &&
+      !pendingAbility &&
+      this.elapsed >= this.boostUntil &&
+      Math.hypot(v.x, v.y) < 0.45 &&
+      Math.abs(this.controlled.angvel()) < 0.65
+    ) {
+      // A walking cube stands on attached legs, not its own collider. Follow
+      // only live joints so detached debris cannot make an airborne head land.
+      const connected = this.connectedBodies();
+      for (const body of connected.values()) {
+        const collider = body.collider(0);
+        this.world.contactPairsWith(collider, (other) => {
+          if (connected.has(other.parent()?.handle ?? -1)) return;
+          this.world.contactPair(collider, other, (manifold) => {
+            if (manifold.numContacts() && Math.abs(manifold.normal().y) > 0.35)
+              supported = true;
+          });
+        });
+      }
+    }
+    this.quietTime = supported ? this.quietTime + dt : 0;
   }
   snapshot(): CrashFrame {
     const c = this.controlled.translation();
     return {
+      settled: this.settled,
+      headId: this.head.handle,
       bodies: [...this.pieces.values()].map((p) => ({
         id: p.body.handle,
         part: p.part,
@@ -1215,7 +1668,30 @@ export class CrashWorld {
         tint: p.tint,
         alpha: p.alpha,
         boss: p.boss,
+        injury: p.injury,
+        charred: p.charred,
       })),
+      carnage: {
+        cues: this.carnage.map((c) => ({ ...c })),
+        grab: this.grab
+          ? { ...this.grab, queued: [...this.grab.queued] }
+          : undefined,
+        attachments: this.broken
+          ? [...this.pieces.values()]
+              .filter(
+                (p) =>
+                  p.horse &&
+                  p.body !== this.torso &&
+                  !['helmet', 'crown', 'eye', 'ghost-head'].includes(p.part),
+              )
+              .slice(0, 5)
+              .map((p) => ({
+                from: this.torso.handle,
+                to: p.body.handle,
+                elastic: this.has('rubber'),
+              }))
+          : [],
+      },
       time: this.elapsed,
       kicks: this.kicks,
       abilityReady: this.abilityReady,
