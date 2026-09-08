@@ -29,6 +29,7 @@ import {
 import { CrashWorld, initPhysics } from './crash';
 import { saveIncident } from './sharing';
 import { modifiers, worldById, type Ability, type WorldId } from './content';
+import { recordPerkEvent } from './effects/perk-motion';
 import {
   newRun,
   beginAttempt,
@@ -493,7 +494,10 @@ export class GameController {
     const events = [...this.state.events, ...(this.crash?.drain() ?? [])];
     this.state.events = [];
     for (const e of events) {
-      const recorded = { ...e, time: this.recordTime };
+      const recorded = {
+        ...recordPerkEvent(e, this.state),
+        time: this.recordTime,
+      };
       if (e.freeze && this.state.reactive && this.state.phase === 'landing')
         this.state.hitStop = Math.max(this.state.hitStop, e.freeze);
       this.audio.event(recorded);

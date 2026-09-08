@@ -144,6 +144,16 @@ export interface GameEvent {
     | 'ghost';
   id?: string;
   time?: number;
+  sceneTime?: number;
+  /** Visual origin of a bean-powered flap, recorded once with its physics beat. */
+  propulsion?: {
+    x: number;
+    y: number;
+    angle: number;
+    vx: number;
+    vy: number;
+    power: number;
+  };
   sound?: string;
   freeze?: number;
   x: number;

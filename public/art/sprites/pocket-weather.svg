@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 140">
+  <defs>
+    <linearGradient id="cloud" x2="0" y2="1">
+      <stop stop-color="#ffffee"/>
+      <stop offset="1" stop-color="#b8e9d9"/>
+    </linearGradient>
+  </defs>
+  <g stroke="#31534b" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M29 98C6 84 17 51 42 54C37 19 86 11 97 43C128 28 154 60 131 83C127 107 61 115 29 98Z" fill="url(#cloud)"/>
+    <path d="M45 45Q53 27 72 34" fill="none" stroke="#fff" stroke-width="6"/>
+    <path d="m72 58 12 4m17-7 12 4" fill="none"/>
+    <ellipse cx="102" cy="76" rx="12" ry="10" fill="#a5d9ca" stroke="none"/>
+    <ellipse cx="122" cy="73" rx="5" ry="7" fill="#31534b" stroke="none"/>
+    <path d="M137 66h19q15 0 10-13m-30 25h30m-35 11h16q17 0 14 12" fill="none" stroke="#75b8aa" stroke-width="5"/>
+    <path d="M48 115h72m-57 11h27" fill="none" stroke="#e9f9d7" stroke-width="4"/>
+  </g>
+</svg>

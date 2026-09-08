@@ -157,7 +157,7 @@ export const RELICS: Relic[] = [
     'beans',
     'Bean propulsion',
     '♨',
-    'Flaps hit 35% harder. Everyone downwind loses.',
+    'Every flap fires a bean-powered fart. 35% more lift and forward boost.',
     'flight',
   ],
   [
@@ -192,7 +192,7 @@ export const RELICS: Relic[] = [
     'tailwind',
     'Pocket weather',
     '≋',
-    'A helpful 35-unit tailwind follows you.',
+    'A pocket cloud blows you forward throughout flight. Combines with beans for stronger fart boosts.',
     'flight',
   ],
   [
@@ -489,13 +489,13 @@ export function dailySeed(date = new Date()) {
 }
 
 export function relicArt(id: string) {
+  if (id === 'tailwind') return '/art/sprites/pocket-weather.svg';
   const names: Record<string, string> = {
     beans: 'bean-propulsion-cloud',
     wings: 'wings',
     rocket: 'jetpack',
     feather: 'wing-left',
     acrobat: 'offended-head',
-    tailwind: 'bean-propulsion-cloud',
     rubber: 'skeletal-torso',
     heavy: 'helmet',
     confetti: 'party-cone',

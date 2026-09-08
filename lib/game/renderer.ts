@@ -18,6 +18,7 @@ import {
 import { worldById, synergies, type WorldId } from './content';
 import { CATASTROPHES } from './catastrophes';
 import { ImpactEffects } from './effects/impact-effects';
+import { PerkEffects } from './effects/perk-effects';
 import { terrainGraphic, spectatorCells } from './terrain';
 import { drawTrampoline } from './trampoline';
 import { drawJetstream } from './flight';
@@ -79,6 +80,7 @@ export class GameRenderer {
   private aura = new Graphics();
   private bgSprites = [new Sprite()];
   private impactEffects!: ImpactEffects;
+  private perkEffects!: PerkEffects;
   private pony = new Container();
   private ponyParts: Record<string, Sprite> = {};
   private shadow = new Graphics();
@@ -164,6 +166,11 @@ export class GameRenderer {
     this.terrain.addChild(this.groundBase);
     this.decor.addChild(this.landingLabel);
     this.impactEffects = new ImpactEffects(this.app);
+    this.perkEffects = new PerkEffects(this.textures['bean-propulsion-cloud']);
+    this.world.addChildAt(
+      this.perkEffects.behind,
+      this.world.getChildIndex(this.actors),
+    );
     this.world.addChildAt(
       this.impactEffects.backdrop,
       this.world.getChildIndex(this.actors),
@@ -192,6 +199,8 @@ export class GameRenderer {
     }
     this.pony.addChildAt(this.aura, 0);
     this.actors.addChild(this.pony, this.playerMarker, this.playerLabel);
+    this.actors.addChild(this.perkEffects.attached);
+    this.fx.addChild(this.perkEffects.front);
     this.playerLabel.anchor.set(0.5);
     for (let i = 0; i < 3; i++) {
       const ring = new Graphics()
@@ -227,7 +236,6 @@ export class GameRenderer {
       'crown',
       'astronaut-helmet',
       'magnetic-horseshoe',
-      'bean-propulsion-cloud',
       'ghost-portal-ring',
       'tnt',
     ]) {
@@ -300,6 +308,7 @@ export class GameRenderer {
     for (const p of this.particles) p.sprite.destroy();
     this.particles = [];
     this.impactEffects?.reset();
+    this.perkEffects?.reset();
   }
   event(e: GameEvent) {
     if (!this.ready) return;
@@ -318,6 +327,7 @@ export class GameRenderer {
     if (impact)
       this.shake = Math.max(this.shake, sound === 'explosion' ? 14 : 6);
     this.impactEffects.event(e, this.reduced, this.gentle);
+    this.perkEffects.event(e);
   }
   private part(
     key: string,
@@ -419,14 +429,6 @@ export class GameRenderer {
       30,
       34,
       Math.sin(cycle) * 0.2,
-    );
-    gear(
-      'bean-propulsion-cloud',
-      has('beans') && air,
-      -95,
-      16,
-      combos.includes('beanstorm') ? 130 : 70,
-      60 + Math.sin(cycle * 2) * 8,
     );
     gear(
       'ghost-portal-ring',
@@ -852,6 +854,14 @@ export class GameRenderer {
       this.screenFx
         .rect(0, 0, this.w, this.h)
         .fill({ color: 0xfff0bc, alpha: s.wreck.flash * 0.25 });
+    this.perkEffects.update(
+      s,
+      time,
+      this.pony,
+      this.zoom,
+      this.reduced,
+      this.budget.density,
+    );
     this.impactEffects.update(dt, time, s, this.reduced);
     this.lastTime = time;
     this.app.render();

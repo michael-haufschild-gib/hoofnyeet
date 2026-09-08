@@ -985,7 +985,13 @@ export default function Home() {
         <section className="play-controls" aria-label="Game controls">
           {pad(
             'primary',
-            crashing ? 'KICK' : air ? 'FLAP' : 'RUN',
+            crashing
+              ? 'KICK'
+              : air
+                ? s.equipment.includes('beans')
+                  ? 'FART BOOST'
+                  : 'FLAP'
+                : 'RUN',
             crashing
               ? `${s.wreck?.kicks ?? 0} left`
               : air

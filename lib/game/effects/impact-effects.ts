@@ -140,7 +140,7 @@ export class ImpactEffects {
       for (let i = 0; i < Math.ceil((reduced ? 1 : 4) * this.density); i++)
         this.mote(e.x - 35, e.y + 5, rng, 'dust', 0xffe3a9, reduced);
     } else if (
-      ['ring', 'flap', 'flip', 'ghost'].includes(sound) ||
+      (['ring', 'flap', 'flip', 'ghost'].includes(sound) && !e.propulsion) ||
       e.kind === 'glide'
     ) {
       for (let i = 0; i < Math.ceil((reduced ? 3 : 10) * this.density); i++)
@@ -207,17 +207,15 @@ export class ImpactEffects {
   update(dt: number, time: number, s: GameState, reduced: boolean) {
     this.elapsed += dt;
     this.trail += dt;
-    if (this.trail > 0.05 / this.density && s.phase === 'flight' && !reduced) {
+    if (
+      this.trail > 0.05 / this.density &&
+      s.phase === 'flight' &&
+      !reduced &&
+      !s.equipment.includes('beans')
+    ) {
       this.trail = 0;
       const rng = random(Math.floor(time * 120));
-      this.mote(
-        s.x - 45,
-        s.y - 40,
-        rng,
-        'star',
-        s.equipment.includes('beans') ? 0x99d681 : 0xffe798,
-        false,
-      );
+      this.mote(s.x - 45, s.y - 40, rng, 'star', 0xffe798, false);
     }
     for (const b of this.bursts) {
       b.age += dt;

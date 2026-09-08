@@ -92,8 +92,23 @@ export function frameGame(
       : Math.min(1.45, width / 520);
   const available = Math.max(45, ground - safeTop);
   const targetZoom = Math.min(nominal, available / (GROUND_Y - anticipatedTop));
+  // Portrait needs room behind the pony for the weather companion and fart
+  // plume. Reserve it for the whole flight to avoid panning on every tap.
+  const rearPerks =
+    portrait &&
+    s.phase === 'flight' &&
+    (s.equipment.includes('beans') || s.equipment.includes('tailwind'));
   const targetX =
-    focusX + (s.phase === 'runup' ? (portrait ? 85 : 160) : crash ? 60 : 110);
+    focusX +
+    (s.phase === 'runup'
+      ? portrait
+        ? 85
+        : 160
+      : crash
+        ? 60
+        : rearPerks
+          ? -45
+          : 110);
   const blend = reduced || !previous ? 1 : 1 - Math.exp(-dt * 5);
   let zoom = previous
     ? previous.zoom + (targetZoom - previous.zoom) * blend

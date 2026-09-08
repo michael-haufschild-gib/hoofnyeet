@@ -172,10 +172,16 @@ export class HorseAudio {
       count: 'ui-click',
     };
     const sound = e.sound ?? names[e.kind] ?? e.kind;
-    this.sample(
-      sound,
-      e.kind === 'tap' ? 0.22 : e.value && e.value < 1 ? e.value : 1,
-    );
+    if (e.propulsion) {
+      // The bundled comic squish becomes a low raspberry on the same flap beat.
+      this.sample('squish', 0.85, e.propulsion.power > 1 ? 0.58 : 0.76);
+      this.sample('flap', 0.35);
+    } else {
+      this.sample(
+        sound,
+        e.kind === 'tap' ? 0.22 : e.value && e.value < 1 ? e.value : 1,
+      );
+    }
     if (this.musicGain && ['crunch', 'land'].includes(e.kind)) {
       const c = this.context!;
       this.musicGain.gain.cancelScheduledValues(c.currentTime);
@@ -249,6 +255,7 @@ export class HorseAudio {
     await Promise.all(
       [
         'main',
+        ...(events.some((e) => e.propulsion) ? ['squish'] : []),
         s.world,
         s.boss ? `boss-act${worldById(s.world).act + 1}` : s.world,
         ...events.map(

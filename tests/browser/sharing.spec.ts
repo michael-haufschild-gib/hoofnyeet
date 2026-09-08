@@ -11,9 +11,13 @@ test('incident storage is bounded, cancellation is recoverable, and video fallba
   await page.waitForFunction(() => window.__hoof?.ready);
   const report = await page.evaluate(async () => {
     const sharingPath = '/lib/game/sharing.ts',
-      simPath = '/lib/game/simulation.ts';
+      simPath = '/lib/game/simulation.ts',
+      contentPath = '/lib/game/content.ts',
+      motionPath = '/lib/game/effects/perk-motion.ts';
     const sharing = await import(sharingPath),
-      sim = await import(simPath);
+      sim = await import(simPath),
+      content = await import(contentPath),
+      motion = await import(motionPath);
     const c = window.__hoof;
     c.setExporting(true);
     const before = JSON.stringify(c.save);
@@ -24,7 +28,13 @@ test('incident storage is bounded, cancellation is recoverable, and video fallba
       x: 2300,
       y: -110,
       distance: 120,
+      equipment: ['beans', 'tailwind'],
+      mod: content.modifiers(['beans', 'tailwind']),
     });
+    const flap = motion.recordPerkEvent(
+      { kind: 'flap', x: state.x, y: state.y },
+      { ...state, time: 0.2 },
+    );
     const recording = {
       appearance: {
         hat: 'party',
@@ -36,7 +46,7 @@ test('incident storage is bounded, cancellation is recoverable, and video fallba
         { ...state, time: 0 },
         { ...state, time: 8, x: 2800, y: -40 },
       ],
-      events: [{ kind: 'flap', sound: 'flap', time: 0.2, id: 'fixture-flap' }],
+      events: [{ ...flap, sound: 'flap', time: 0.2, id: 'fixture-flap' }],
       duration: 8,
     };
     for (let i = 0; i < 8; i++)

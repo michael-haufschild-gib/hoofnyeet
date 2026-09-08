@@ -26,6 +26,10 @@ export function ponyPose(s: GameState, time: number): PonyPose {
     ? Math.sin(Math.min(1, s.flipProgress) * Math.PI)
     : 0;
   const air = s.phase === 'flight' || s.phase === 'approach';
+  const beanKick =
+    s.phase === 'flight' && s.equipment.includes('beans')
+      ? Math.sin(Math.min(1, s.flapPose / 0.45) * Math.PI)
+      : 0;
   const base = air
     ? [-0.95, -0.7, 0.9, 0.7]
     : idle
@@ -37,8 +41,20 @@ export function ponyPose(s: GameState, time: number): PonyPose {
           -Math.sin(phase + 0.7) * 0.85,
         ];
   return {
-    xScale: 1 + compression * 0.15 - launch * 0.12 + flap * 0.055 - tuck * 0.08,
-    yScale: 1 - compression * 0.25 + launch * 0.24 - flap * 0.06 - tuck * 0.09,
+    xScale:
+      1 +
+      compression * 0.15 -
+      launch * 0.12 +
+      flap * 0.055 -
+      tuck * 0.08 +
+      beanKick * 0.09,
+    yScale:
+      1 -
+      compression * 0.25 +
+      launch * 0.24 -
+      flap * 0.06 -
+      tuck * 0.09 -
+      beanKick * 0.07,
     bob: running
       ? Math.cos(phase * 2) * 3
       : idle
@@ -53,7 +69,7 @@ export function ponyPose(s: GameState, time: number): PonyPose {
       ? Math.sin(time * 1.8) * 0.035
       : running
         ? -stride * 0.08
-        : compression * 0.26 - launch * 0.18 - flap * 0.2,
+        : compression * 0.26 - launch * 0.18 - flap * 0.2 - beanKick * 0.22,
     headY: compression * 8 - launch * 6 + flap * 7,
     legs: base.map(
       (a, i) =>
@@ -63,7 +79,8 @@ export function ponyPose(s: GameState, time: number): PonyPose {
       -0.3 +
       (running ? Math.sin(phase - 0.6) * 0.2 : Math.sin(time * 4) * 0.12) -
       launch * 0.5 +
-      flap * 0.2,
+      flap * 0.2 -
+      beanKick * 0.85,
     wingAngle: flap * 0.9 + Math.sin(time * 6) * 0.08,
   };
 }
