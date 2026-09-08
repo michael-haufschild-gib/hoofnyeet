@@ -285,15 +285,20 @@ export default function Home() {
         } as Record<string, string>
       )[code] ?? code.replace(/^Key|^Digit/, '');
     return (
-      <kbd className={`guide-key ${action}`}>
-        <span className="guide-keyboard">{label}</span>
-        <span
-          className="guide-touch"
-          aria-label={action === 'primary' ? 'Left button' : 'Right button'}
-        >
-          {action === 'primary' ? <Zap size={15} /> : <ArrowUp size={15} />}
+      <div className="guide-input">
+        <span className="guide-keyboard">
+          <kbd className={`guide-key ${action}`}>{label}</kbd>
+          <span className="guide-mouse">
+            or {action === 'primary' ? 'left click' : 'right click'}
+          </span>
         </span>
-      </kbd>
+        <span className="guide-touch">
+          <span className={`guide-key ${action}`} aria-hidden="true">
+            {action === 'primary' ? <Zap size={18} /> : <ArrowUp size={18} />}
+          </span>
+          <b>{action === 'primary' ? 'Tap left' : 'Tap right'}</b>
+        </span>
+      </div>
     );
   };
   const pad = (
@@ -330,11 +335,14 @@ export default function Home() {
         <b>{label}</b>
         <small>{sub}</small>
       </span>
-      <kbd>
-        {action === 'primary'
-          ? view.save.primaryKey.replace('Key', '')
-          : view.save.secondaryKey.replace('Arrow', '')}
-      </kbd>
+      <span className="pad-inputs">
+        <kbd>
+          {action === 'primary'
+            ? view.save.primaryKey.replace('Key', '')
+            : view.save.secondaryKey.replace('Arrow', '')}
+        </kbd>
+        <small>or {action === 'primary' ? 'left click' : 'right click'}</small>
+      </span>
     </button>
   );
   return (
@@ -385,7 +393,7 @@ export default function Home() {
         <canvas
           ref={canvas}
           tabIndex={0}
-          aria-label="Game field. Space to gallop, flap or panic kick. Up to jump, flip or unleash your ability."
+          aria-label="Hoof and Yeet game field"
           onPointerDown={(e) => {
             if (e.button !== 0 && e.button !== 2) return;
             e.preventDefault();
@@ -427,6 +435,11 @@ export default function Home() {
               hoof<span>&</span>yeet
             </h1>
             <fieldset className="home-controls" aria-label="How to play">
+              <div className="guide-row guide-inputs">
+                <span aria-hidden="true" />
+                {controlKey('primary')}
+                {controlKey('secondary')}
+              </div>
               {[
                 ['On track', 'Run', 'Jump'],
                 ['In air', 'Flap', 'Roll'],
@@ -435,12 +448,10 @@ export default function Home() {
                 <div className="guide-row" key={phase}>
                   <span className="guide-phase">{phase}</span>
                   <span className="guide-action">
-                    {controlKey('primary')}
                     <b>{primary}</b>
                     {primary === 'Run' && <small>(tap)</small>}
                   </span>
                   <span className="guide-action">
-                    {controlKey('secondary')}
                     <b>{secondary}</b>
                   </span>
                 </div>

@@ -9,12 +9,19 @@ test('title teaches both controls and keeps the animated horse clear of the guid
       ? [
           [390, 844],
           [375, 667],
+          [820, 1180],
+          [1180, 820],
         ]
       : info.project.name === 'phone-landscape'
         ? [[915, 412]]
         : [
             [1280, 720],
             [1024, 600],
+            [1560, 1280],
+            [1920, 1080],
+            [2560, 1440],
+            [768, 1024],
+            [620, 900],
           ];
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
@@ -26,6 +33,17 @@ test('title teaches both controls and keeps the animated horse clear of the guid
     await expect(
       page.getByRole('group', { name: 'How to play' }),
     ).toBeVisible();
+    const touch = info.project.name.startsWith('phone');
+    for (const input of ['Tap left', 'Tap right']) {
+      if (touch)
+        await expect(page.getByText(input, { exact: true })).toBeVisible();
+      else await expect(page.getByText(input, { exact: true })).toBeHidden();
+    }
+    for (const mouse of ['or left click', 'or right click']) {
+      if (touch)
+        await expect(page.getByText(mouse, { exact: true })).toBeHidden();
+      else await expect(page.getByText(mouse, { exact: true })).toBeVisible();
+    }
     await expect(page.locator('.guide-action > b')).toHaveText([
       'Run',
       'Jump',
@@ -43,6 +61,9 @@ test('title teaches both controls and keeps the animated horse clear of the guid
         const pony = (r as unknown as { pony: Container }).pony;
         const b = pony.getBounds();
         const arena = document.querySelector('.arena')!.getBoundingClientRect();
+        const menu = document
+          .querySelector('.tour-home')!
+          .getBoundingClientRect();
         const overlays = [
           '.tour-home h1',
           '.home-controls',
@@ -60,6 +81,10 @@ test('title teaches both controls and keeps the animated horse clear of the guid
         });
         return {
           pony: { x: b.x, y: b.y, width: b.width, height: b.height },
+          menu: { y: menu.y - arena.y, height: menu.height },
+          instructionSize: parseFloat(
+            getComputedStyle(document.querySelector('.guide-action')!).fontSize,
+          ),
           overlays,
           width: r.w,
           height: r.h,
@@ -75,6 +100,21 @@ test('title teaches both controls and keeps the animated horse clear of the guid
     expect(frame.pony.y).toBeGreaterThan(0);
     expect(frame.pony.x + frame.pony.width).toBeLessThan(frame.width);
     expect(frame.pony.y + frame.pony.height).toBeLessThan(frame.height);
+    if (
+      frame.width > 900 ||
+      (frame.width > 600 && frame.width > frame.height)
+    ) {
+      const ponyCentre = frame.pony.y + frame.pony.height / 2;
+      const menuCentre = frame.menu.y + frame.menu.height / 2;
+      expect(
+        Math.abs(ponyCentre - menuCentre),
+        `${width}x${height}: the menu and hero must form one composition`,
+      ).toBeLessThan(frame.height * 0.12);
+      if (width >= 1400) {
+        expect(frame.instructionSize).toBeGreaterThanOrEqual(20);
+        expect(frame.pony.height).toBeGreaterThan(400);
+      }
+    }
     for (const overlay of frame.overlays) {
       expect(overlay.y).toBeGreaterThanOrEqual(0);
       expect(overlay.y + overlay.height).toBeLessThan(frame.height);
@@ -103,15 +143,19 @@ test('title teaches both controls and keeps the animated horse clear of the guid
     window.__hoof.setPreference('primaryKey', 'KeyA');
     window.__hoof.setPreference('secondaryKey', 'KeyW');
   });
-  await expect(page.locator('.guide-key.primary .guide-keyboard')).toHaveText([
+  await expect(page.locator('.guide-keyboard .guide-key.primary')).toHaveText(
     'A',
-    'A',
-    'A',
-  ]);
-  await expect(page.locator('.guide-key.secondary .guide-keyboard')).toHaveText(
-    ['W', 'W', 'W'],
+  );
+  await expect(page.locator('.guide-keyboard .guide-key.secondary')).toHaveText(
+    'W',
   );
   await page.getByRole('button', { name: /^PLAY$/ }).click();
+  const inputs = page.locator('.pad-inputs');
+  await expect(inputs).toHaveCount(2);
+  for (const input of await inputs.all()) {
+    if (info.project.name.startsWith('phone')) await expect(input).toBeHidden();
+    else await expect(input).toBeVisible();
+  }
   await page.getByRole('button', { name: 'Pause game', exact: true }).click();
   await page.evaluate(() =>
     Object.assign(window.__hoof.state, {

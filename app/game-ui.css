@@ -59,14 +59,15 @@
   letter-spacing: 1px;
 }
 .play-first .tour-home {
-  top: 12%;
+  top: 50%;
   left: 6%;
-  width: 43%;
-  max-width: 490px;
+  width: 44%;
+  max-width: 620px;
+  transform: translateY(-50%);
 }
 .play-first .tour-home h1 {
-  margin: 0 0 30px;
-  font-size: clamp(44px, 7.5cqw, 96px);
+  margin: 0 0 clamp(22px, 3cqh, 40px);
+  font-size: clamp(60px, min(9cqw, 13cqh), 140px);
   line-height: 1;
   letter-spacing: -3px;
   white-space: nowrap;
@@ -77,34 +78,51 @@
 }
 .home-controls {
   display: grid;
-  gap: 10px;
+  gap: clamp(8px, 1.2cqh, 16px);
   border: 0;
   padding: 0;
-  margin: 0 0 26px;
+  margin: 0 0 clamp(24px, 3.5cqh, 42px);
   min-width: 0;
-  max-width: 430px;
+  max-width: 580px;
 }
 .guide-row {
   display: grid;
-  grid-template-columns: 76px 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: clamp(64px, 6cqw, 88px) 1fr 1fr;
+  gap: clamp(8px, 1cqw, 16px);
   align-items: center;
-  min-height: 40px;
+  min-height: clamp(26px, 3.8cqh, 38px);
+}
+.guide-row.guide-inputs {
+  align-items: start;
+  min-height: 0;
+  margin-bottom: 4px;
+}
+.guide-input .guide-keyboard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.guide-mouse {
+  font-size: clamp(11px, 1cqw, 14px);
+  font-weight: 800;
+  white-space: nowrap;
+  color: #365d4b;
 }
 .guide-phase {
-  font-size: 11px;
+  font-size: clamp(10px, 1cqw, 14px);
   font-weight: 900;
   color: #365d4b;
 }
 .guide-action {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: clamp(8px, 0.8cqw, 13px);
   white-space: nowrap;
-  font-size: 16px;
+  font-size: clamp(14px, min(1.6cqw, 2.9cqh), 24px);
 }
 .guide-action > small {
-  font-size: 10px;
+  font-size: clamp(10px, 0.85cqw, 12px);
   font-weight: 800;
   margin-left: -5px;
 }
@@ -112,15 +130,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 42px;
-  height: 31px;
+  min-width: clamp(36px, 4cqw, 58px);
+  height: clamp(30px, 4.5cqh, 44px);
   padding: 0 7px;
   border: 1px solid #52755d;
   border-radius: 7px;
   background: #f6f7de;
   box-shadow: 0 3px 0 #52755d;
   font:
-    800 11px 'Nunito',
+    800 clamp(10px, 1.1cqw, 15px) 'Nunito',
     sans-serif;
   color: #244d3e;
 }
@@ -129,17 +147,21 @@
 }
 .guide-touch {
   display: none;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: clamp(12px, 2cqw, 18px);
 }
 .play-first .tour-home .start-button {
-  width: 210px;
-  max-width: 100%;
-  min-height: 64px;
-  padding: 16px 25px;
-  font-size: 22px;
+  width: 100%;
+  max-width: 400px;
+  min-height: clamp(60px, 8cqh, 80px);
+  padding: 16px 28px;
+  font-size: clamp(22px, 2cqw, 28px);
   justify-content: space-between;
 }
 .play-first .mode-buttons {
-  gap: 20px;
+  gap: 28px;
   margin-top: 14px;
 }
 .play-first .mode-buttons > button {
@@ -149,7 +171,7 @@
   box-shadow: none;
   padding: 8px 0;
   min-height: 40px;
-  font-size: 13px;
+  font-size: clamp(12px, 1.2cqw, 16px);
   font-weight: 900;
   gap: 8px;
 }
@@ -514,9 +536,20 @@
   font-size: 11px;
   margin-top: 3px;
 }
-.play-first .action-pad kbd {
+.play-first .pad-inputs {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.play-first .action-pad kbd {
   font-size: 11px;
+  border: 1px solid #8da17d;
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  padding: 3px 8px;
 }
 .play-first .action-pad .pad-icon {
   width: 34px;
@@ -638,7 +671,7 @@
 .clip-stage {
   padding: 20px;
 }
-@media (max-width: 600px) {
+@container (max-width: 600px) or ((max-width: 900px) and (max-aspect-ratio: 1 / 1)) {
   .play-first .arena.is-title::after {
     content: '';
     position: absolute;
@@ -647,14 +680,9 @@
     pointer-events: none;
     z-index: 1;
   }
-  .play-first .topbar {
-    height: 52px;
-  }
-  .play-first .brand {
-    font-size: 27px;
-  }
   .play-first .tour-home {
     inset: 22px 20px 16px;
+    transform: none;
     width: auto;
     max-width: none;
     display: grid;
@@ -663,7 +691,7 @@
   }
   .play-first .tour-home h1 {
     grid-row: 1;
-    font-size: clamp(38px, 13cqw, 70px);
+    font-size: clamp(38px, 13cqw, 96px);
     margin: 0;
     text-align: center;
     letter-spacing: -2px;
@@ -671,26 +699,28 @@
   .play-first .home-controls {
     grid-row: 3;
     width: 100%;
+    max-width: 580px;
+    justify-self: center;
     margin-bottom: 18px;
     gap: 9px;
   }
   .guide-row {
-    grid-template-columns: 64px 1fr 1fr;
+    grid-template-columns: clamp(64px, 13cqw, 96px) 1fr 1fr;
     gap: 8px;
-    min-height: 33px;
+    min-height: clamp(24px, 5cqw, 36px);
   }
   .guide-phase {
-    font-size: 10px;
+    font-size: clamp(10px, 2cqw, 14px);
   }
   .guide-action {
-    font-size: 14px;
+    font-size: clamp(14px, 2.7cqw, 20px);
     gap: 7px;
   }
   .guide-key {
-    min-width: 32px;
-    height: 28px;
+    min-width: clamp(32px, 6.4cqw, 52px);
+    height: clamp(28px, 6cqw, 40px);
     padding: 0 5px;
-    font-size: 9px;
+    font-size: clamp(9px, 1.9cqw, 13px);
   }
   .guide-action > small {
     font-size: 9px;
@@ -700,6 +730,8 @@
     grid-row: 4;
     min-height: 54px;
     width: 100%;
+    max-width: 580px;
+    justify-self: center;
     font-size: 20px;
   }
   .play-first .mode-buttons {
@@ -722,6 +754,14 @@
   }
   .home-best {
     margin-top: 12px;
+  }
+}
+@media (max-width: 600px) {
+  .play-first .topbar {
+    height: 52px;
+  }
+  .play-first .brand {
+    font-size: 27px;
   }
   .play-first .planning-screen {
     padding: 20px 16px;
@@ -859,6 +899,9 @@
     width: 25px;
     height: 25px;
   }
+  .play-first .pad-inputs {
+    display: none;
+  }
   .play-first .result-screen {
     top: 26px;
     padding: 22px 22px 12px;
@@ -872,14 +915,15 @@
     font-size: 76px;
   }
 }
-@media (hover: none) {
-  .guide-keyboard {
+/* A wide tablet still needs touch instructions; viewport width cannot tell us. */
+@media (any-pointer: coarse) {
+  .guide-input .guide-keyboard {
     display: none;
   }
   .guide-touch {
     display: flex;
   }
-  .play-first .action-pad kbd {
+  .play-first .pad-inputs {
     display: none;
   }
 }
@@ -891,7 +935,7 @@
     font-size: 25px;
   }
   .play-first .tour-home {
-    top: 6%;
+    top: 50%;
     width: 45%;
   }
   .play-first .tour-home h1 {

@@ -27,16 +27,18 @@ export function frameGame(
   const short = height < 350;
   const portrait = width < 600 || height > width;
   if (s.phase === 'title') {
-    // The title page reserves the left column for controls, or the lower half
-    // in portrait. Frame the complete horse inside the remaining stage.
-    const ground = height * (portrait ? 0.48 : 0.8);
+    // Match the title's container query, including portrait tablets.
+    const stacked = width <= 600 || (width <= 900 && height >= width);
     const zoom = Math.min(
-      (width * (portrait ? 0.68 : 0.36)) / 180,
-      (height * (portrait ? 0.29 : 0.64)) / 135,
-      3.4,
+      (width * (stacked ? 0.68 : 0.42)) / 180,
+      (height * (stacked ? (width > 600 ? 0.33 : 0.29) : 0.62)) / 135,
+      stacked ? 3.4 : 4.6,
     );
+    // Centre the pony beside the menu, with its hooves on the track. Anchoring
+    // the track to 80% of the screen separated them in tall desktop windows.
+    const ground = stacked ? height * 0.48 : height * 0.5 + (135 * zoom) / 2;
     return {
-      x: TITLE_PONY_X - (portrait ? 0 : (width * 0.25) / zoom),
+      x: TITLE_PONY_X - (stacked ? 0 : (width * 0.25) / zoom),
       y: GROUND_Y - (ground - height * 0.58) / zoom,
       zoom,
       ground,
