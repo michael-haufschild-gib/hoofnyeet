@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowUp,
   MoveRight,
@@ -21,6 +21,9 @@ import {
   X,
   Home as HomeIcon,
   ChevronRight,
+  Map,
+  Sparkles,
+  Package,
 } from 'lucide-react';
 import {
   Dialog,
@@ -99,9 +102,9 @@ export default function Home() {
     controller = useRef<GameController | null>(null),
     exportAbort = useRef<AbortController | null>(null);
   const [view, setView] = useState(initial),
-    [panel, setPanel] = useState<'settings' | 'scrapbook' | 'clip' | null>(
-      null,
-    ),
+    [panel, setPanel] = useState<
+      'settings' | 'scrapbook' | 'clip' | 'levels' | 'upgrades' | null
+    >(null),
     [replacement, setReplacement] = useState<string | null>(null),
     [shopping, setShopping] = useState(false),
     [portrait, setPortrait] = useState(true),
@@ -120,6 +123,9 @@ export default function Home() {
     'controls' | 'wardrobe' | 'rules'
   >('controls');
   const [portraits, setPortraits] = useState<Record<string, string>>({});
+  const hudRef = useCallback((node: HTMLDivElement | null) => {
+    controller.current?.observeHud(node);
+  }, []);
   useEffect(() => {
     if (!canvas.current) return;
     const c = new GameController(canvas.current, setView);
@@ -460,21 +466,64 @@ export default function Home() {
             {challengeWarning && (
               <p className="challenge-warning">{challengeWarning}</p>
             )}
-            <button
-              className="start-button"
-              disabled={!view.ready}
-              onClick={() => {
-                controller.current?.start();
-                focus();
-              }}
-            >
-              {view.ready ? 'PLAY' : 'LOADING…'}{' '}
-              <Play size={23} fill="currentColor" />
-            </button>
-            <div className="mode-buttons">
-              <button disabled={!view.ready} onClick={() => start('tour')}>
-                Disaster tour <MoveRight size={15} />
+            <div className="home-actions">
+              <button
+                className="start-button"
+                disabled={!view.ready}
+                onClick={() => {
+                  if (view.save.run)
+                    void controller.current?.resumeRun().then(focus);
+                  else start('tour');
+                }}
+              >
+                <span>
+                  <b>{view.save.run ? 'RESUME TOUR' : 'PLAY TOUR'}</b>
+                  <small>
+                    {view.save.run
+                      ? `Event ${view.save.run.stage + 1} / 9`
+                      : '9 events · earn upgrades'}
+                  </small>
+                </span>
+                <Play size={22} fill="currentColor" />
               </button>
+              <button
+                className="quick-play"
+                disabled={!view.ready}
+                onClick={() => {
+                  controller.current?.start();
+                  focus();
+                }}
+              >
+                <Zap size={20} />
+                <span>Quick play</span>
+              </button>
+            </div>
+            <nav className="home-destinations" aria-label="Explore the game">
+              <button onClick={() => open('levels')}>
+                <Map />
+                <span>Levels</span>
+              </button>
+              <button
+                disabled={!view.ready}
+                onClick={() => {
+                  setSettingsTab('wardrobe');
+                  open('settings');
+                }}
+              >
+                <Sparkles />
+                <span>Pony & hats</span>
+              </button>
+              <button onClick={() => open('upgrades')}>
+                <Package />
+                <span>Upgrades</span>
+              </button>
+            </nav>
+            <div className="mode-buttons">
+              {view.save.run && (
+                <button disabled={!view.ready} onClick={() => start('tour')}>
+                  New tour <MoveRight size={15} />
+                </button>
+              )}
               <button
                 disabled={!view.ready}
                 onClick={() => start('daily')}
@@ -487,17 +536,6 @@ export default function Home() {
                 Daily <Skull size={15} />
               </button>
             </div>
-            {view.save.run && (
-              <button
-                className="resume-button"
-                disabled={!view.ready}
-                onClick={() => {
-                  void controller.current?.resumeRun().then(focus);
-                }}
-              >
-                Resume tour · {view.save.run.stage + 1}/9 <Play size={14} />
-              </button>
-            )}
           </div>
         )}
         {view.screen === 'briefing' && run && (
@@ -507,7 +545,7 @@ export default function Home() {
                 {run.mode === 'daily' ? 'DAILY · ' : ''}ACT{' '}
                 {Math.floor(run.stage / 3) + 1} / 3
               </span>
-              <h2>Pick your playground.</h2>
+              <h2>Choose your level</h2>
               {(run.updatedDaily || run.rules !== 'standard') && (
                 <p className="rule-description">
                   {run.updatedDaily
@@ -553,7 +591,7 @@ export default function Home() {
               )}
             </div>
             <div className="route-footnote">
-              <span>{goal?.distance} m to clear this event</span>
+              <span>{goal?.distance} m → choose an upgrade</span>
               <span>
                 <Heart size={14} /> {run.insurance} tries
               </span>
@@ -655,6 +693,15 @@ export default function Home() {
                 </button>
               )}
             </div>
+            <div className="equipped-perks" aria-label="Equipped upgrades">
+              <span>Equipped</span>
+              {build.map((id) => (
+                <span key={id} title={relicById(id).description}>
+                  <img src={relicArt(id)} alt="" width={26} height={26} />
+                  {relicById(id).name}
+                </span>
+              ))}
+            </div>
             {shopping && (
               <div className="pitstop-shop">
                 <button
@@ -685,13 +732,26 @@ export default function Home() {
         )}
         {playing && (
           <>
-            <div className="hud">
+            <div className="hud" ref={hudRef}>
               <div className="hud-metric">
                 {s.launched ? (
-                  <strong>
-                    {s.distance.toFixed(1)}
-                    <small> m</small>
-                  </strong>
+                  <>
+                    <span>{crashing ? 'Total distance' : 'Distance'}</span>
+                    <strong>
+                      {s.distance.toFixed(1)}
+                      <small> m</small>
+                    </strong>
+                    {crashing && (
+                      <span>
+                        +
+                        {Math.max(
+                          0,
+                          s.distance - (s.flightDistance ?? s.distance),
+                        ).toFixed(1)}{' '}
+                        m after landing
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <>
                     <span>Speed</span>
@@ -704,13 +764,36 @@ export default function Home() {
                     />
                   </>
                 )}
-                {s.launched && run?.mode !== 'quick' && (
+                {s.launched && !crashing && run?.mode !== 'quick' && (
                   <span className={contractClear ? 'target-cleared' : ''}>
                     {s.distance >= (goal?.distance ?? 0) ? '✓' : '↗'}{' '}
                     {goal?.distance} m target
                   </span>
                 )}
               </div>
+              {s.phase !== 'title' && !replay && (
+                <div
+                  className={`ability-hint ${crashing && s.wreck?.abilityReady ? 'is-ready' : ''}`}
+                  aria-label="Equipped ability"
+                >
+                  <img
+                    src={relicArt(s.ability)}
+                    alt=""
+                    width={32}
+                    height={32}
+                  />
+                  <span>
+                    <b>{relicById(s.ability).name}</b>
+                    <small>
+                      {crashing
+                        ? s.wreck?.abilityReady
+                          ? 'Use the right control now'
+                          : 'Used'
+                        : 'Right control after landing'}
+                    </small>
+                  </span>
+                </div>
+              )}
               {s.boss && s.launched && (
                 <div className="boss-progress" aria-label="Boss objective">
                   <span>
@@ -762,6 +845,14 @@ export default function Home() {
                       : 'NICE YEET.'}
             </div>
             <h2>{s.failed ? 'Premature yeet.' : LANDINGS[s.landing].name}</h2>
+            <p className="result-measure">
+              {(s.flightDistance ?? s.distance).toFixed(1)} m jump +{' '}
+              {Math.max(
+                0,
+                s.distance - (s.flightDistance ?? s.distance),
+              ).toFixed(1)}{' '}
+              m after landing
+            </p>
             <div className="result-distance">
               {s.distance.toFixed(1)}
               <span>m</span>
@@ -935,25 +1026,115 @@ export default function Home() {
         }}
       >
         <DialogContent
-          className={`horse-dialog ${panel === 'clip' ? 'clip-dialog' : ''}`}
+          className={`horse-dialog ${panel === 'clip' ? 'clip-dialog' : ''} ${panel === 'levels' || panel === 'upgrades' ? 'browse-dialog' : ''}`}
         >
           <div className="dialog-heading">
             <DialogTitle>
               {panel === 'settings'
-                ? 'Settings'
+                ? settingsTab === 'wardrobe'
+                  ? 'Pony & hats'
+                  : 'Settings'
                 : panel === 'clip'
                   ? 'Share your yeet'
-                  : 'Scrapbook'}
+                  : panel === 'levels'
+                    ? 'Choose a level'
+                    : panel === 'upgrades'
+                      ? 'Upgrades'
+                      : 'Scrapbook'}
             </DialogTitle>
             <DialogDescription className="sr-only">
               {panel === 'settings'
                 ? 'Dress for the job. Reassign the buttons. Negotiate with gravity.'
                 : panel === 'clip'
                   ? 'Your actual recorded disaster, with sound. Nothing is uploaded automatically.'
-                  : `${view.save.rounds} attempts. ${view.save.wins} completed tours. ${view.save.discoveries.length}/24 discoveries. Saved on this device.`}
+                  : panel === 'levels'
+                    ? 'Quick play in any of the six worlds. Your tour stays saved.'
+                    : panel === 'upgrades'
+                      ? 'Win tour events to choose upgrades. Abilities are used after landing; perks work automatically.'
+                      : `${view.save.rounds} attempts. ${view.save.wins} completed tours. ${view.save.discoveries.length}/24 discoveries. Saved on this device.`}
             </DialogDescription>
           </div>
           <div className="dialog-body">
+            {panel === 'levels' && (
+              <>
+                <p className="browse-intro">Quick play · all six worlds</p>
+                <div className="level-browser">
+                  {WORLDS.map((world) => (
+                    <button
+                      key={world.id}
+                      disabled={!view.ready}
+                      aria-label={`Play ${world.name}`}
+                      onClick={() => {
+                        close();
+                        controller.current?.start(world.id);
+                        focus();
+                      }}
+                    >
+                      <img
+                        src={`/art/${world.art}.webp`}
+                        alt=""
+                        width={300}
+                        height={140}
+                        loading="lazy"
+                      />
+                      <span>
+                        <b>{world.name}</b>
+                        <Play size={16} fill="currentColor" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {panel === 'upgrades' && (
+              <>
+                <p className="browse-intro">
+                  Play a tour. Clear an event. Pick an upgrade.
+                </p>
+                {['active', 'passive'].map((category) => (
+                  <section className="upgrade-library" key={category}>
+                    <h3>
+                      {category === 'active' ? 'Abilities' : 'Perks'}
+                      <small>
+                        {category === 'active'
+                          ? 'Right control after landing · one use'
+                          : 'Work automatically when equipped'}
+                      </small>
+                    </h3>
+                    <div className="upgrade-catalogue">
+                      {RELICS.filter(
+                        (r) =>
+                          (r.category === 'active') === (category === 'active'),
+                      ).map((r) => (
+                        <article
+                          key={r.id}
+                          className={
+                            view.save.unlocked.includes(r.id) ? '' : 'is-locked'
+                          }
+                        >
+                          <img
+                            src={relicArt(r.id)}
+                            alt=""
+                            width={64}
+                            height={64}
+                            loading="lazy"
+                          />
+                          <div>
+                            <h4>{r.name}</h4>
+                            <p>{r.description}</p>
+                            <small>
+                              {view.save.unlocked.includes(r.id)
+                                ? 'Available in tours'
+                                : 'More attempts unlock this'}
+                            </small>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </>
+            )}
             {panel === 'settings' && (
               <>
                 <div

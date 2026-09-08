@@ -1,4 +1,4 @@
-export const CONTENT_VERSION = 3;
+export const CONTENT_VERSION = 4;
 export type WorldId =
   | 'farm'
   | 'candy'
@@ -365,7 +365,7 @@ export const RELICS: Relic[] = [
     'dynamite',
     'Dynamite Diaper',
     '✹',
-    'A deeply unfortunate radial explosion.',
+    'Use the right control after landing. Blast your wreck and ignite nearby TNT.',
     'active',
     'dynamite',
   ],

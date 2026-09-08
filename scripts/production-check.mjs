@@ -36,11 +36,11 @@ page.context().on('response', (response) => {
 try {
   await fs.mkdir('output/playwright', { recursive: true });
   await page.goto(localUrl('preview'));
-  await page.getByRole('button', { name: /^PLAY$/ }).waitFor();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).waitFor();
   await page.waitForFunction(
     () =>
       [...document.querySelectorAll('button')].find(
-        (b) => b.textContent.trim() === 'PLAY',
+        (b) => b.textContent.trim() === 'Quick play',
       )?.disabled === false,
   );
   await page.waitForLoadState('networkidle');
@@ -56,7 +56,7 @@ try {
       'The download measurement omitted the worker-loaded artwork',
     );
   await page.screenshot({ path: 'output/playwright/production-home.png' });
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   await page.evaluate(() => {
     const frames = { durations: [], last: 0, active: true };
     window.__frameMeasurement = frames;

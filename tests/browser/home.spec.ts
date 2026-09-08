@@ -53,7 +53,9 @@ test('title teaches both controls and keeps the animated horse clear of the guid
       'Ability',
     ]);
     await expect(page.getByText('Huge liability.')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^PLAY$/ })).toBeEnabled();
+    await expect(
+      page.getByRole('button', { name: 'Quick play', exact: true }),
+    ).toBeEnabled();
 
     const measure = () =>
       page.evaluate(() => {
@@ -67,7 +69,9 @@ test('title teaches both controls and keeps the animated horse clear of the guid
         const overlays = [
           '.tour-home h1',
           '.home-controls',
-          '.tour-home > .start-button',
+          '.home-actions > .start-button',
+          '.home-destinations',
+          '.mode-buttons',
         ].map((selector) => {
           const el = document.querySelector(selector)!;
           const d = el.getBoundingClientRect();
@@ -149,7 +153,7 @@ test('title teaches both controls and keeps the animated horse clear of the guid
   await expect(page.locator('.guide-keyboard .guide-key.secondary')).toHaveText(
     'W',
   );
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   const inputs = page.locator('.pad-inputs');
   await expect(inputs).toHaveCount(2);
   for (const input of await inputs.all()) {

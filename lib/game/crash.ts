@@ -57,6 +57,8 @@ interface Piece {
   horse: boolean;
   boss: boolean;
   activated: boolean;
+  impactSpeed: number;
+  detonateAt?: number;
   afterRole?: 'first' | 'surprise' | 'vehicle';
 }
 let initPromise: Promise<void> | undefined;
@@ -95,7 +97,6 @@ export class CrashWorld {
   private havoc = 0;
   private bossHits = 0;
   private origin: number;
-  private explosions: { x: number; y: number }[] = [];
   private mechanismBodies: {
     piece: Piece;
     anchorX: number;
@@ -273,6 +274,7 @@ export class CrashWorld {
         (p) =>
           !p.horse &&
           !p.boss &&
+          p.body !== this.controlled &&
           p !== this.afterProp &&
           !this.mechanismBodies.some(({ piece }) => piece === p),
       );
@@ -320,6 +322,7 @@ export class CrashWorld {
       horse,
       boss,
       activated: horse,
+      impactSpeed: 0,
     };
     this.pieces.set(body.handle, p);
     this.colliders.set(collider.handle, p);
@@ -373,6 +376,7 @@ export class CrashWorld {
         len = Math.max(0.6, Math.hypot(dx, dy));
       if (len < 11) {
         p.activated = true;
+        this.ignite(p, 0.12 + len * 0.018);
         p.body.applyImpulse(
           {
             x: ((dx / len) * power) / (1 + len * 0.2),
@@ -384,6 +388,41 @@ export class CrashWorld {
     }
     this.flash = 1;
     this.emit('explosion', x, y, 0.8, 0.065);
+  }
+  private explosive(p: Piece) {
+    return (
+      p.part === 'tnt' ||
+      p.part === 'barrel' ||
+      (p.part === 'piano' && this.has('confetti'))
+    );
+  }
+  private ignite(p: Piece, fuse = 0.16) {
+    if (!this.explosive(p) || p.detonateAt !== undefined) return;
+    p.detonateAt = this.elapsed + fuse;
+    p.activated = true;
+    p.tint = 0xff8050;
+  }
+  private detonate(p: Piece) {
+    const position = p.body.translation();
+    const x = position.x * SCALE,
+      y = position.y * SCALE;
+    if (!p.scored) this.havoc += Math.round(60 * this.s.mod.havoc);
+    p.scored = true;
+    // Possessing an explosive must not leave the camera or controls attached
+    // to a removed Rapier body. The offended head inherits the escape route.
+    if (this.controlled === p.body) {
+      this.controlled = this.head;
+      this.head.setTranslation(position, true);
+    }
+    for (const [handle, piece] of this.colliders)
+      if (piece === p) this.colliders.delete(handle);
+    this.mechanismBodies = this.mechanismBodies.filter(
+      ({ piece }) => piece !== p,
+    );
+    if (this.afterProp === p) this.afterProp = null;
+    this.pieces.delete(p.body.handle);
+    this.world.removeRigidBody(p.body);
+    this.burst(x, y, 15);
   }
   private reskin(piece: Piece, part: string, width: number, height: number) {
     const size = fitArt(part, width, height);
@@ -471,6 +510,10 @@ export class CrashWorld {
       0.8,
       0.08,
     );
+    if (this.has('confetti')) {
+      const at = this.controlled.translation();
+      this.burst(at.x * SCALE, at.y * SCALE, 12);
+    }
   }
   action(action: Action) {
     if (this.elapsed > 9.4) return;
@@ -852,7 +895,6 @@ export class CrashWorld {
     this.flash = Math.max(0, this.flash - dt * 3);
     this.beat('disassembly', this.has('loose') ? 0.2 : 1.1, () => {
       this.disassemble();
-      if (this.has('confetti')) this.burst(100, -30, 12);
     });
     const spec = CATASTROPHES[this.s.world][this.s.disaster % 4];
     this.beat('machine-warning', Math.max(0.1, spec.beat - 0.4), () => {
@@ -943,7 +985,11 @@ export class CrashWorld {
         );
         p.body.setLinvel({ x: 0, y: 20 }, true);
       }
-      if (this.has('aftershock')) this.burst(220, -20, 15);
+    });
+    this.beat('aftershock', 2, () => {
+      if (!this.has('aftershock')) return;
+      const at = this.controlled.translation();
+      this.burst(at.x * SCALE, at.y * SCALE, 15);
     });
     this.aftermath(dt);
     if (
@@ -1025,12 +1071,24 @@ export class CrashWorld {
             true,
           );
       }
+    for (const p of this.pieces.values()) {
+      const velocity = p.body.linvel();
+      p.impactSpeed = Math.hypot(velocity.x, velocity.y);
+      if (p.detonateAt !== undefined)
+        p.tint = Math.floor(this.elapsed * 24) % 2 ? 0xff7050 : 0xfff0a0;
+    }
     this.world.step(this.queue);
+    const speed = (p: Piece) =>
+      Math.max(p.impactSpeed, Math.hypot(p.body.linvel().x, p.body.linvel().y));
     this.queue.drainCollisionEvents((a, b, started) => {
       if (!started) return;
       const pa = this.colliders.get(a),
         pb = this.colliders.get(b);
-      if (!pa || !pb) return;
+      if (!pa || !pb) {
+        const piece = pa ?? pb;
+        if (piece?.activated && speed(piece) > 1.5) this.ignite(piece);
+        return;
+      }
       this.aftermathContact(pa, pb);
       const ghost =
         pa.part === 'ghost-head' ? pa : pb.part === 'ghost-head' ? pb : null;
@@ -1049,8 +1107,6 @@ export class CrashWorld {
           0.1,
         );
       }
-      const speed = (p: Piece) =>
-        Math.hypot(p.body.linvel().x, p.body.linvel().y);
       if (
         Math.max(speed(pa), speed(pb)) < 1.5 ||
         (!pa.activated && !pb.activated)
@@ -1070,22 +1126,13 @@ export class CrashWorld {
         this.caption = spec.punchline;
       if (pa.activated && !pb.boss) pb.activated = true;
       if (pb.activated && !pa.boss) pa.activated = true;
+      this.ignite(pa);
+      this.ignite(pb);
       for (const p of [pa, pb])
         if (!p.horse && !p.boss && !p.scored) {
           p.scored = true;
           this.havoc += Math.round(60 * this.s.mod.havoc);
-          if (
-            p.part === 'tnt' ||
-            p.part === 'barrel' ||
-            (p.part === 'piano' && this.has('confetti'))
-          ) {
-            this.flash = 1;
-            p.tint = 0xff5b58;
-            this.explosions.push({
-              x: p.body.translation().x * SCALE,
-              y: p.body.translation().y * SCALE,
-            });
-          } else
+          if (!this.explosive(p))
             this.emit(
               ['bone', 'skeleton', 'bonepile'].includes(p.part)
                 ? 'boneclatter'
@@ -1137,10 +1184,22 @@ export class CrashWorld {
         }
       }
     });
-    this.queue.drainContactForceEvents(() => {});
+    this.queue.drainContactForceEvents((event) => {
+      const a = this.colliders.get(event.collider1());
+      const b = this.colliders.get(event.collider2());
+      if (
+        !(a?.activated || b?.activated) ||
+        Math.max(a ? speed(a) : 0, b ? speed(b) : 0) < 1.5
+      )
+        return;
+      if (a) this.ignite(a);
+      if (b) this.ignite(b);
+    });
     if (this.contactBreak && !this.broken) this.disassemble();
-    for (const point of this.explosions) this.burst(point.x, point.y, 15);
-    this.explosions = [];
+    // Remove consumed bodies only after both Rapier event queues are drained.
+    for (const p of this.pieces.values())
+      if (p.detonateAt !== undefined && this.elapsed >= p.detonateAt)
+        this.detonate(p);
   }
   snapshot(): CrashFrame {
     const c = this.controlled.translation();

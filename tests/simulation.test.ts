@@ -134,7 +134,7 @@ void test('completed flips score; only the first three earn a velocity bonus', (
   }
   assert.equal(s.rotation, 0);
 });
-void test('an interrupted flip is a cartwheel; distance stops at first contact', () => {
+void test('an interrupted flip selects cartwheel and preserves the initial jump distance', () => {
   const s = flying();
   s.x = 2000;
   s.y = -1;
@@ -146,7 +146,7 @@ void test('an interrupted flip is a cartwheel; distance stops at first contact',
   assert.equal(s.flips, 0);
   const distance = s.distance;
   seconds(s, 9);
-  assert.equal(s.distance, distance);
+  assert.equal(s.flightDistance, distance);
   assert.equal(s.phase, 'results');
   assert.ok(distance > 88 && distance < 89);
 });

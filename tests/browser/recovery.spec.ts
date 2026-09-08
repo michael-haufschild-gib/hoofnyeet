@@ -29,7 +29,7 @@ test('graphics interruption pauses the attempt and restores illustrated renderin
     c.save.rounds = 3;
     c.setPreference('pony', 'bubblegum');
   });
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => window.__hoof.state.phase))
     .toBe('runup');

@@ -86,7 +86,7 @@ test('changing an outfit cannot rewrite the incident being recorded', async ({
   test.skip(info.project.name !== 'chromium');
   await page.goto('/');
   await page.waitForFunction(() => window.__hoof?.ready);
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   await page.waitForFunction(() => window.__hoof.state.phase === 'countdown');
   const looks = await page.evaluate(() => {
     const c = window.__hoof;
@@ -108,7 +108,7 @@ test('changing an outfit cannot rewrite the incident being recorded', async ({
   expect(looks.hat).toBe('helmet');
   expect(looks.next).toBe('bubblegum');
   await returnHome(page);
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   await page.waitForFunction(() => window.__hoof.state.phase === 'countdown');
   expect(
     await page.evaluate(() => window.__hoof.recording().appearance?.ponyId),
@@ -132,7 +132,7 @@ test('unlocked tour rules alter the next tour and long collections keep their cl
   await page.getByRole('tab', { name: 'Tour rules' }).click();
   await page.getByRole('button', { name: /One-winged wonder/ }).click();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await page.getByRole('button', { name: /Disaster tour/ }).click();
+  await page.getByRole('button', { name: /^(PLAY TOUR|New tour)/ }).click();
   await expect(
     page.getByText('One panic flap per event, even with extra-flap equipment.'),
   ).toBeVisible();
@@ -174,7 +174,7 @@ test('an old challenge has a readable recovery and an old daily resumes with pre
   });
   await page.goto('/');
   await page.waitForFunction(() => window.__hoof?.ready);
-  await page.getByRole('button', { name: /Resume tour/ }).click();
+  await page.getByRole('button', { name: /RESUME TOUR/ }).click();
   await expect(
     page.getByText(/Your saved daily continues as a tour/),
   ).toBeVisible();

@@ -137,7 +137,7 @@ export function readSave(storage?: Pick<Storage, 'getItem'>): SaveData {
           Object.entries(raw.daily)
             .filter(
               ([k, v]) =>
-                /^(v[23]:)?\d{4}-\d{2}-\d{2}(:assisted)?$/.test(k) &&
+                /^(v[234]:)?\d{4}-\d{2}-\d{2}(:assisted)?$/.test(k) &&
                 typeof v === 'number' &&
                 Number.isFinite(v) &&
                 v >= 0,

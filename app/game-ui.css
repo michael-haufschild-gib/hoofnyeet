@@ -178,6 +178,231 @@
 .play-first .mode-buttons > button:hover {
   color: #b74f31;
 }
+.home-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 580px;
+}
+.play-first .home-actions .start-button {
+  width: 100%;
+  max-width: none;
+  padding: 12px 20px;
+  min-height: 72px;
+  font-size: clamp(17px, 1.7cqw, 24px);
+  gap: 8px;
+}
+.home-actions .start-button > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+.home-actions .start-button small {
+  font:
+    800 clamp(10px, 0.9cqw, 13px) 'Nunito',
+    sans-serif;
+  letter-spacing: 0;
+}
+.quick-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #fff8e8eb;
+  border: 2px solid #315d48;
+  border-radius: 12px;
+  box-shadow: 0 4px #315d48;
+  font-size: clamp(13px, 1.2cqw, 18px);
+  font-weight: 900;
+  color: #244d3e;
+}
+.home-destinations {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+  width: 100%;
+  max-width: 580px;
+}
+.home-destinations button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 60px;
+  border: 1px solid #315d4866;
+  border-radius: 10px;
+  background: #fff9e7e8;
+  color: #244d3e;
+  font-size: clamp(12px, 1.1cqw, 16px);
+  font-weight: 900;
+  box-shadow: 0 3px #315d482e;
+}
+.home-destinations svg {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.home-destinations button:hover,
+.quick-play:hover {
+  background: #fff5cd;
+}
+.home-destinations button:active,
+.quick-play:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+.home-destinations button:focus-visible,
+.quick-play:focus-visible {
+  outline: 3px solid #d15e3b;
+  outline-offset: 4px;
+}
+.horse-dialog.browse-dialog {
+  width: min(900px, calc(100vw - 28px)) !important;
+  max-width: min(900px, calc(100vw - 28px)) !important;
+}
+.browse-intro {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: #436653;
+}
+.level-browser {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.level-browser button {
+  overflow: hidden;
+  border: 1px solid #91ac94;
+  border-radius: 12px;
+  background: #fffaf0;
+  padding: 0;
+  color: #244d3e;
+  text-align: left;
+}
+.level-browser button:hover {
+  border-color: #ca6847;
+  box-shadow: 0 3px #ca684740;
+}
+.level-browser img {
+  width: 100%;
+  height: 115px;
+  object-fit: cover;
+  display: block;
+}
+.level-browser button > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  min-height: 62px;
+}
+.level-browser b {
+  font: 20px/1.1 'Lilita One';
+}
+.level-browser svg {
+  flex-shrink: 0;
+}
+.upgrade-library h3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+}
+.upgrade-library h3 small {
+  font:
+    800 12px 'Nunito',
+    sans-serif;
+  color: #53705c;
+}
+.upgrade-catalogue {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 26px;
+}
+.upgrade-catalogue article {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  background: #edf0dc;
+  border-radius: 12px;
+}
+.upgrade-catalogue img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.upgrade-catalogue h4 {
+  font: 18px/1.1 'Lilita One';
+  margin: 0 0 6px;
+}
+.upgrade-catalogue p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.upgrade-catalogue small {
+  font-size: 10px;
+  font-weight: 900;
+  color: #4e7859;
+}
+.upgrade-catalogue .is-locked {
+  background: #ecebe3;
+}
+.upgrade-catalogue .is-locked img {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.equipped-perks {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  align-items: center;
+}
+.equipped-perks > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.equipped-perks img {
+  object-fit: contain;
+}
+.ability-hint {
+  display: flex;
+  gap: 7px;
+  max-width: 200px;
+  align-items: center;
+}
+.ability-hint img {
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.ability-hint > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ability-hint b {
+  font-size: 12px;
+  line-height: 1.1;
+}
+.ability-hint small {
+  font-size: 10px;
+  line-height: 1.15;
+}
+.ability-hint.is-ready {
+  color: #315d48;
+  background: #ffdf78;
+  padding: 6px 9px;
+  border-radius: 10px;
+}
 .play-first .resume-button {
   background: #fff9e9d9;
   margin: 10px 0 0;
@@ -576,6 +801,12 @@
   font-size: 30px;
   line-height: 1.1;
 }
+.result-measure {
+  margin: 10px 0 0;
+  font-size: 11px;
+  font-weight: 800;
+  color: #53705c;
+}
 .play-first .result-distance {
   font-size: 84px;
   line-height: 1.1;
@@ -675,7 +906,7 @@
   .play-first .arena.is-title::after {
     content: '';
     position: absolute;
-    inset: 48% 0 0;
+    inset: min(48%, calc(100% - 355px)) 0 0;
     background: linear-gradient(transparent, #fff8e8f5 30%, #fff8e8);
     pointer-events: none;
     z-index: 1;
@@ -727,7 +958,6 @@
     margin-left: -4px;
   }
   .play-first .tour-home .start-button {
-    grid-row: 4;
     min-height: 54px;
     width: 100%;
     max-width: 580px;
@@ -735,10 +965,44 @@
     font-size: 20px;
   }
   .play-first .mode-buttons {
-    grid-row: 5;
+    grid-row: 6;
     margin-top: 8px;
     justify-content: center;
     gap: 30px;
+  }
+  .home-actions {
+    grid-row: 4;
+    justify-self: center;
+    gap: 8px;
+  }
+  .play-first .home-actions .start-button {
+    min-height: 54px;
+    font-size: 16px;
+    padding: 8px 12px;
+  }
+  .home-actions .start-button small {
+    font-size: 9px;
+  }
+  .quick-play {
+    font-size: 12px;
+    gap: 4px;
+  }
+  .home-destinations {
+    grid-row: 5;
+    justify-self: center;
+    margin-top: 12px;
+    gap: 7px;
+  }
+  .home-destinations button {
+    flex-direction: column;
+    gap: 4px;
+    min-height: 55px;
+    padding: 6px 2px;
+    font-size: 11px;
+  }
+  .home-destinations svg {
+    width: 20px;
+    height: 20px;
   }
   .play-first .resume-button {
     grid-row: 6;
@@ -757,6 +1021,39 @@
   }
 }
 @media (max-width: 600px) {
+  .level-browser {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .level-browser img {
+    height: 70px;
+  }
+  .level-browser button > span {
+    padding: 9px;
+    min-height: 48px;
+  }
+  .level-browser b {
+    font-size: 16px;
+  }
+  .upgrade-catalogue {
+    grid-template-columns: 1fr;
+  }
+  .play-first .hud {
+    flex-direction: column;
+  }
+  .ability-hint {
+    max-width: 185px;
+  }
+  .ability-hint img {
+    width: 24px;
+    height: 24px;
+  }
+  .ability-hint b {
+    font-size: 10px;
+  }
+  .ability-hint small {
+    font-size: 9px;
+  }
   .play-first .topbar {
     height: 52px;
   }
@@ -928,6 +1225,32 @@
   }
 }
 @media (max-height: 550px) and (orientation: landscape) {
+  .browse-dialog .dialog-heading {
+    padding: 14px 24px 6px;
+  }
+  .browse-dialog .dialog-heading [data-slot='dialog-title'] {
+    font-size: 26px;
+  }
+  .browse-dialog .dialog-body {
+    padding: 0 24px 14px;
+  }
+  .browse-intro {
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+  .level-browser {
+    gap: 10px;
+  }
+  .level-browser img {
+    height: clamp(40px, 13svh, 65px);
+  }
+  .level-browser button > span {
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+  .level-browser b {
+    font-size: 16px;
+  }
   .play-first .topbar {
     height: 44px;
   }
@@ -939,15 +1262,15 @@
     width: 45%;
   }
   .play-first .tour-home h1 {
-    font-size: clamp(40px, 6.5cqw, 60px);
-    margin-bottom: 14px;
+    font-size: clamp(36px, 10cqh, 48px);
+    margin-bottom: 8px;
   }
-  .home-controls {
+  .play-first .home-controls {
     gap: 4px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
   .guide-row {
-    min-height: 30px;
+    min-height: 24px;
     grid-template-columns: 62px 1fr 1fr;
     gap: 7px;
   }
@@ -964,10 +1287,31 @@
     min-height: 48px;
     font-size: 18px;
     padding: 10px 18px;
-    width: 180px;
+    width: 100%;
   }
   .play-first .mode-buttons {
-    margin-top: 8px;
+    margin-top: 5px;
+  }
+  .play-first .mode-buttons > button {
+    min-height: 36px;
+    padding: 6px 0;
+  }
+  .play-first .home-actions .start-button {
+    min-height: 46px;
+    font-size: 14px;
+    padding: 6px 10px;
+  }
+  .home-destinations {
+    margin-top: 10px;
+  }
+  .home-destinations button {
+    min-height: 40px;
+    font-size: 11px;
+    gap: 5px;
+  }
+  .home-destinations svg {
+    width: 17px;
+    height: 17px;
   }
   .play-first .home-best {
     display: none;
@@ -1090,6 +1434,11 @@
     grid-column: 1;
     font-size: 66px;
   }
+  .play-first .result-measure {
+    grid-column: 1;
+    margin-top: 3px;
+    font-size: 10px;
+  }
   .play-first .result-stats {
     grid-column: 1;
     margin: 3px 0 0;
@@ -1113,5 +1462,35 @@
   }
   .play-first .result-screen .unlock-note {
     display: none;
+  }
+}
+
+@container (min-width: 601px) and (min-height: 381px) and (max-height: 700px) {
+  .play-first .tour-home h1 {
+    font-size: clamp(40px, 10cqh, 76px);
+    margin-bottom: 16px;
+  }
+  .play-first .home-controls {
+    gap: 5px;
+    margin-bottom: 18px;
+  }
+  .guide-row {
+    min-height: 25px;
+  }
+  .guide-input .guide-keyboard {
+    gap: 5px;
+  }
+  .play-first .home-actions .start-button {
+    min-height: 54px;
+    font-size: 17px;
+  }
+  .home-destinations {
+    margin-top: 12px;
+  }
+  .home-destinations button {
+    min-height: 48px;
+  }
+  .play-first .mode-buttons {
+    margin-top: 5px;
   }
 }

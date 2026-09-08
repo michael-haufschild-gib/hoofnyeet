@@ -67,8 +67,8 @@ test('menus keep primary actions visible and flight keeps the whole landing plan
     await page.setViewportSize({ width, height });
     await page.goto('/');
     await page.waitForFunction(() => window.__hoof?.ready);
-    await visibleAction(page, '.tour-home > .start-button');
-    await page.getByRole('button', { name: /Disaster tour/ }).click();
+    await visibleAction(page, '.home-actions > .start-button');
+    await page.getByRole('button', { name: /^(PLAY TOUR|New tour)/ }).click();
     for (const act of [0, 1, 2]) {
       await page.evaluate((act) => {
         const c = window.__hoof;
@@ -288,7 +288,7 @@ test('a completed tour with all equipment slots keeps replay and sharing visible
     await page.setViewportSize({ width, height });
     await page.goto('/');
     await page.waitForFunction(() => window.__hoof?.ready);
-    await page.getByRole('button', { name: /Disaster tour/ }).click();
+    await page.getByRole('button', { name: /^(PLAY TOUR|New tour)/ }).click();
     await page.evaluate(() => {
       const c = window.__hoof;
       c.setExporting(true);

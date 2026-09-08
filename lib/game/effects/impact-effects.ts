@@ -39,6 +39,7 @@ export class ImpactEffects {
   private bursts: Burst[] = [];
   private textures: Texture[] = [];
   private lastBurst = -Infinity;
+  private lastExplosion = -Infinity;
   private elapsed = 0;
   private trail = 0;
   private waves = new Graphics();
@@ -171,7 +172,11 @@ export class ImpactEffects {
         [0xffdd65, 0xf2b278, gentle ? 0xff8dd9 : 0xe46a53, 0x83cfaa][i % 4],
         reduced,
       );
-    if (this.elapsed - this.lastBurst < (big ? 0.15 : 0.55) || reduced) return;
+    // A landing or disassembly in the same frame must not swallow the blast.
+    // Chain explosions still share a short visual cooldown to keep them legible.
+    const last = sound === 'explosion' ? this.lastExplosion : this.lastBurst;
+    if (this.elapsed - last < (big ? 0.15 : 0.55) || reduced) return;
+    if (sound === 'explosion') this.lastExplosion = this.elapsed;
     this.lastBurst = this.elapsed;
     const b = this.bursts.reduce((a, b) => (a.age > b.age ? a : b));
     b.age = 0;
@@ -286,6 +291,7 @@ export class ImpactEffects {
       b.sprite.visible = b.label.visible = false;
     }
     this.lastBurst = -Infinity;
+    this.lastExplosion = -Infinity;
     this.waves.clear();
   }
   dispose() {

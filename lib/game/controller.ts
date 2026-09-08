@@ -1,5 +1,6 @@
 import {
   act,
+  applyCrashFrame,
   createClock,
   createGame,
   jumpTarget,
@@ -92,6 +93,7 @@ export class GameController {
   private savedRound = -1;
   private observer: ResizeObserver;
   private caption: Element | null;
+  private hud: Element | null = null;
   private resizePending = false;
   private crash: CrashWorld | null = null;
   private previousSimTime = 0;
@@ -240,9 +242,9 @@ export class GameController {
     this.persist();
     this.publish();
   }
-  start() {
+  start(world: WorldId = this.run?.mode === 'quick' ? this.run.world : 'farm') {
     this.startRun('quick');
-    void this.launch();
+    void this.launch(world);
   }
   async launch(world?: WorldId) {
     if (!this.ready || !this.run || this.graphicsLost) return;
@@ -505,6 +507,23 @@ export class GameController {
   private complete() {
     if (this.savedRound === this.state.round) return;
     this.savedRound = this.state.round;
+    // Include the final physics tick even when it falls between replay samples.
+    // Keep its landing pose; the results phase resets phaseTime to zero.
+    const last = this.frames.at(-1);
+    if (last) {
+      this.frames.push({
+        ...this.state,
+        phase: 'landing',
+        phaseTime:
+          last.phaseTime +
+          Math.max(0, this.state.time - (last.sceneTime ?? last.time)),
+        time: this.recordTime,
+        sceneTime: this.state.time,
+        events: [],
+        rings: [...this.state.rings],
+      });
+      if (this.frames.length > 1440) this.frames.shift();
+    }
     this.newBest = this.state.distance > this.save.best;
     const next = finishRound(this.save, this.state);
     this.newHats = next.hats.filter((h) => !this.save.hats.includes(h));
@@ -555,6 +574,12 @@ export class GameController {
     });
   }
   exporting = false;
+  observeHud(element: Element | null) {
+    if (this.hud) this.observer.unobserve(this.hud);
+    this.hud = element;
+    if (element) this.observer.observe(element);
+    this.resizePending = true;
+  }
   setExporting(active: boolean) {
     this.exporting = active;
     if (active) this.audio.pause();
@@ -564,7 +589,13 @@ export class GameController {
     if (this.disposed) return;
     if (this.resizePending) {
       this.resizePending = false;
-      this.renderer.hudInset = 80;
+      const canvasTop = this.renderer.canvas.getBoundingClientRect().top;
+      this.renderer.hudInset = Math.max(
+        80,
+        (this.hud?.getBoundingClientRect().bottom ?? canvasTop) -
+          canvasTop +
+          12,
+      );
       this.renderer.resize(
         undefined,
         undefined,
@@ -603,10 +634,7 @@ export class GameController {
         if (this.state.phase === 'landing' && this.state.reactive) {
           this.crash ??= new CrashWorld(this.state);
           if (this.state.time > this.previousSimTime) this.crash.step(STEP);
-          const wreck = this.crash.snapshot();
-          this.state.wreck = wreck;
-          this.state.havoc = wreck.havoc;
-          this.state.bossHits = wreck.bossHits;
+          applyCrashFrame(this.state, this.crash.snapshot());
         }
         this.previousSimTime = this.state.time;
         this.recordTime += STEP;
@@ -687,6 +715,7 @@ export class GameController {
       flaps: this.state.flaps,
       flips: this.state.flips,
       distance: this.state.distance,
+      flightDistance: this.state.flightDistance,
       style: this.state.style,
       havoc: this.state.havoc,
       quality: this.state.quality,

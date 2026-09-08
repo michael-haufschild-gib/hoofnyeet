@@ -26,7 +26,7 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(localUrl());
   await page.waitForFunction(() => window.__hoof?.ready);
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   await page.locator('canvas').focus();
   const captured = new Set();
   const frames = [];

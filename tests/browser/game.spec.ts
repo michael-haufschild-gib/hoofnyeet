@@ -14,7 +14,7 @@ async function ready(page: Page) {
 async function attempt(page: Page, touch = false, mouse = false) {
   await page.locator('canvas').focus();
   const tap = await nativeActions(page, touch, mouse);
-  let landedDistance: number | undefined;
+  let lastDistance = 0;
   let flightChecked = false;
   for (let i = 0; i < 390; i++) {
     const s = await page.evaluate(() => window.__hoof.snapshot());
@@ -69,8 +69,8 @@ async function attempt(page: Page, touch = false, mouse = false) {
       if (s.flaps > 0 && s.y > -630) await tap('primary');
       await tap('secondary');
     } else if (s.phase === 'landing') {
-      landedDistance ??= s.distance;
-      expect(s.distance).toBe(landedDistance);
+      expect(s.distance).toBeGreaterThanOrEqual(lastDistance);
+      lastDistance = s.distance;
       if (i % 10 === 0) await tap('primary');
       if (i % 23 === 0) await tap('secondary');
     }
@@ -94,7 +94,7 @@ test('keyboard, mouse and touch round, single result, optional replay and reset'
   await page.screenshot({
     path: `output/playwright/${info.project.name}-unstable-home.png`,
   });
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   const s = await attempt(
     page,
     info.project.name.startsWith('phone'),
@@ -131,8 +131,10 @@ test('tour briefing, pit stop, replacement and saved stage resume', async ({
 }, info) => {
   test.skip(info.project.name !== 'chromium');
   await ready(page);
-  await page.getByRole('button', { name: /Disaster tour/ }).click();
-  await expect(page.getByText('Pick your playground.')).toBeVisible();
+  await page.getByRole('button', { name: /^(PLAY TOUR|New tour)/ }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Choose your level', exact: true }),
+  ).toBeVisible();
   await page.screenshot({ path: 'output/playwright/tour-briefing.png' });
   await page.locator('.route-card').first().click();
   await attempt(page);
@@ -144,7 +146,7 @@ test('tour briefing, pit stop, replacement and saved stage resume', async ({
   expect(await page.evaluate(() => window.__hoof.run?.stage)).toBe(1);
   await page.reload();
   await page.waitForFunction(() => window.__hoof?.ready);
-  await page.getByRole('button', { name: /Resume tour/ }).click();
+  await page.getByRole('button', { name: /RESUME TOUR/ }).click();
   expect(await page.evaluate(() => window.__hoof.run?.stage)).toBe(1);
   await page.waitForFunction(() => window.__hoof.screen === 'game');
   expect(await page.evaluate(() => window.__hoof.run?.world)).toBe('farm');
@@ -155,7 +157,7 @@ test('clip export contains video and audio; native sharing is separate', async (
   test.skip(info.project.name !== 'chromium');
   test.setTimeout(65000);
   await ready(page);
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   await attempt(page);
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await expect(
@@ -190,7 +192,7 @@ test('settings, repeat rejection and simultaneous touch release', async ({
   await page.reload();
   await page.waitForFunction(() => window.__hoof?.ready);
   expect(await page.evaluate(() => window.__hoof.save.reduced)).toBe(true);
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   await page.waitForFunction(() => window.__hoof.state.phase === 'runup');
   await page.locator('canvas').focus();
   await page.keyboard.down('Space');
@@ -226,18 +228,18 @@ test('a saved tour survives preference changes and a separate Quick Yeet', async
 }, info) => {
   test.skip(info.project.name !== 'chromium');
   await ready(page);
-  await page.getByRole('button', { name: /Disaster tour/ }).click();
+  await page.getByRole('button', { name: /^(PLAY TOUR|New tour)/ }).click();
   const seed = await page.evaluate(() => window.__hoof.run!.seed);
   await returnHome(page);
   await page.reload();
   await page.waitForFunction(() => window.__hoof?.ready);
   await page.getByRole('button', { name: 'Mute sound' }).click();
   expect(await page.evaluate(() => window.__hoof.save.run?.seed)).toBe(seed);
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   await returnHome(page);
   await page.reload();
   await page.waitForFunction(() => window.__hoof?.ready);
-  await page.getByRole('button', { name: /Resume tour/ }).click();
+  await page.getByRole('button', { name: /RESUME TOUR/ }).click();
   expect(await page.evaluate(() => window.__hoof.run?.seed)).toBe(seed);
   await expect(page.locator('.route-card').first()).toBeVisible();
 });
@@ -246,9 +248,7 @@ test('upgrade choices advance directly, act boundaries offer routes, and shoppin
   page,
 }, info) => {
   await ready(page);
-  await page
-    .getByRole('button', { name: 'Disaster tour', exact: true })
-    .click();
+  await page.getByRole('button', { name: /^(PLAY TOUR|New tour)/ }).click();
   const pitstop = async (stage: number, full = false) => {
     await page.evaluate(
       ({ stage, full }) => {

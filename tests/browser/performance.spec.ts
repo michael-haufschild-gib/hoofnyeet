@@ -12,7 +12,7 @@ test('automatic graphics scaling preserves game state, viewport, input targets a
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await page.waitForFunction(() => window.__hoof?.ready);
-  await page.getByRole('button', { name: /^PLAY$/ }).click();
+  await page.getByRole('button', { name: 'Quick play', exact: true }).click();
   const result = await page.evaluate(() => {
     const c = window.__hoof;
     c.setExporting(true);

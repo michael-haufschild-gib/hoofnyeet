@@ -92,6 +92,15 @@ export class GameRenderer {
       stroke: { color: '#254637', width: 4 },
     },
   });
+  private landingLabel = new Text({
+    text: '',
+    style: {
+      fontFamily: 'Lilita One',
+      fontSize: 15,
+      fill: '#fff8e8',
+      stroke: { color: '#853f2f', width: 4 },
+    },
+  });
   private bodySprites = new Map<number, Sprite>();
   private particles: Particle[] = [];
   private labels: Text[] = [];
@@ -153,6 +162,7 @@ export class GameRenderer {
     if (this.disposed) return;
     this.textures = Object.fromEntries(sprites);
     this.terrain.addChild(this.groundBase);
+    this.decor.addChild(this.landingLabel);
     this.impactEffects = new ImpactEffects(this.app);
     this.world.addChildAt(
       this.impactEffects.backdrop,
@@ -219,6 +229,7 @@ export class GameRenderer {
       'magnetic-horseshoe',
       'bean-propulsion-cloud',
       'ghost-portal-ring',
+      'tnt',
     ]) {
       const sprite = new Sprite(this.textures[key]);
       sprite.anchor.set(0.5);
@@ -381,6 +392,7 @@ export class GameRenderer {
     };
     for (const p of Object.values(this.gear)) p.visible = false;
     gear('jetpack', has('rocket'), -34, -25, 56, 70, air ? -0.22 : 0);
+    gear('tnt', s.ability === 'dynamite', -26, 10, 42, 42, -0.12);
     gear(
       'wing-left',
       has('wings'),
@@ -606,6 +618,24 @@ export class GameRenderer {
           (this.h - this.captionInset - groundY - 10) / this.zoom -
             label.height / 2,
         );
+    }
+    this.landingLabel.visible = crash && !s.failed;
+    if (this.landingLabel.visible) {
+      // Show where the jump ended while kicks and rebounds extend the total.
+      const x = s.impactX;
+      this.track
+        .moveTo(x, GROUND_Y + 8 / this.zoom)
+        .lineTo(x, GROUND_Y - 46 / this.zoom)
+        .stroke({ color: 0xfff8e8, width: 5 / this.zoom })
+        .moveTo(x, GROUND_Y + 8 / this.zoom)
+        .lineTo(x, GROUND_Y - 46 / this.zoom)
+        .stroke({ color: 0xc96040, width: 2 / this.zoom });
+      this.landingLabel.text = `JUMP · ${(s.flightDistance ?? s.distance).toFixed(1)} m`;
+      this.landingLabel.scale.set(1 / this.zoom);
+      this.landingLabel.position.set(
+        x + 8 / this.zoom,
+        GROUND_Y - 46 / this.zoom,
+      );
     }
     const cue = jumpTarget(s);
     const after = s.wreck?.aftermath;

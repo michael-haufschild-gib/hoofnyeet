@@ -36,7 +36,11 @@ export function frameGame(
     );
     // Centre the pony beside the menu, with its hooves on the track. Anchoring
     // the track to 80% of the screen separated them in tall desktop windows.
-    const ground = stacked ? height * 0.48 : height * 0.5 + (135 * zoom) / 2;
+    // The compact title reserves room below the hooves for the control guide
+    // and navigation, instead of letting the extra buttons cover the pony.
+    const ground = stacked
+      ? Math.min(height * 0.48, height - 355)
+      : height * 0.5 + (135 * zoom) / 2;
     return {
       x: TITLE_PONY_X - (stacked ? 0 : (width * 0.25) / zoom),
       y: GROUND_Y - (ground - height * 0.58) / zoom,

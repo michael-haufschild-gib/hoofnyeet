@@ -186,7 +186,10 @@ export interface GameState {
   flipProgress: number;
   flips: number;
   style: number;
+  /** Furthest distance reached by the player, including the reactive crash. */
   distance: number;
+  /** Initial jump only; preserved when kicks and abilities extend the total. */
+  flightDistance: number;
   maxHeight: number;
   rings: number[];
   taps: number;
@@ -238,6 +241,7 @@ export function createGame(round = 0): GameState {
     flips: 0,
     style: 0,
     distance: 0,
+    flightDistance: 0,
     maxHeight: 0,
     rings: [],
     taps: 0,
@@ -346,6 +350,7 @@ export function chooseLanding(
 }
 export function land(s: GameState, failed = false, reason = '') {
   s.distance = failed ? 0 : Math.max(0, (s.x - TRACK.trampoline) / 10);
+  s.flightDistance = s.distance;
   s.impactX = s.x;
   if (s.reactive) s.disaster = (s.disaster + Math.floor(s.distance / 100)) % 4;
   s.impactRotation = s.rotation;
@@ -365,6 +370,15 @@ export function land(s: GameState, failed = false, reason = '') {
   phase(s, 'landing');
   say(s, failed ? reason : LANDINGS[s.landing].award, 2.5);
   event(s, 'land');
+}
+/** Record every physics tick, so rebounds count and moving backwards loses nothing. */
+export function applyCrashFrame(s: GameState, wreck: CrashFrame) {
+  if (s.phase !== 'landing' || s.paused) return;
+  s.wreck = wreck;
+  s.havoc = wreck.havoc;
+  s.bossHits = wreck.bossHits;
+  if (!s.failed && Number.isFinite(wreck.focusX))
+    s.distance = Math.max(s.distance, (wreck.focusX - TRACK.trampoline) / 10);
 }
 export function stepGame(s: GameState, dt = STEP) {
   if (s.paused) return;

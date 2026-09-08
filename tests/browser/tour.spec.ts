@@ -21,8 +21,12 @@ test('complete nine-event tour with real inputs, contracts, upgrades and stable 
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(challengeUrl(newRun('tour', 118), baseURL!));
   await page.waitForFunction(() => window.__hoof?.ready);
-  if (await page.getByRole('button', { name: /Disaster tour/ }).isVisible())
-    await page.getByRole('button', { name: /Disaster tour/ }).click();
+  if (
+    await page
+      .getByRole('button', { name: /^(PLAY TOUR|New tour)/ })
+      .isVisible()
+  )
+    await page.getByRole('button', { name: /^(PLAY TOUR|New tour)/ }).click();
   const rows = [];
   const memory =
     info.project.name === 'chromium'
