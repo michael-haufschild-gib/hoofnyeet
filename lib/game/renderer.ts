@@ -1,4 +1,6 @@
 import { CarnageEffects } from './effects/carnage-effects';
+import 'pixi.js/prepare';
+import { SIDESHOW_ART } from './effects/spectator-motion';
 import {
   Application,
   Assets,
@@ -12,12 +14,11 @@ import {
 import {
   TRACK,
   RINGS,
-  jumpTarget,
   type GameState,
   type GameEvent,
   type Hat,
 } from './simulation';
-import { worldById, synergies, type WorldId } from './content';
+import { worldById, synergies, type WorldId, type Ability } from './content';
 import { CATASTROPHES } from './catastrophes';
 import { ImpactEffects } from './effects/impact-effects';
 import { PerkEffects } from './effects/perk-effects';
@@ -25,10 +26,16 @@ import { terrainGraphic, spectatorCells } from './terrain';
 import { drawTrampoline } from './trampoline';
 import { drawJetstream } from './flight';
 import { ponyPose } from './pose';
-import { frameGame, TITLE_PONY_X, type CameraFrame } from './camera';
+import { ROCKET_ART, rocketRigPose } from './rocket-rig';
+import {
+  frameGame,
+  TITLE_PONY_X,
+  type CameraFrame,
+  type RigBounds,
+} from './camera';
 import { RenderBudget } from './render-budget';
 import { PONIES, type PonyId, type PonyOutfit } from './cosmetics';
-import { Headwear } from './headwear';
+import { Headwear, type HeadArt } from './headwear';
 import { ponyPalette } from './effects/pony-palette';
 import {
   GROUND_Y,
@@ -116,11 +123,10 @@ export class GameRenderer {
   private labels: Text[] = [];
   private ringSprites: Graphics[] = [];
   private spectators: Sprite[] = [];
+  private crowdLayer = new Container({ label: 'trackside-audience' });
   private courseProps: Sprite[] = [];
   private initialized = false;
   private disposed = false;
-  private shake = 0;
-  private labelWorld: WorldId | null = null;
   private lastWorld: WorldId = 'farm';
   private lastTime: number | null = null;
   private budget: RenderBudget;
@@ -152,6 +158,7 @@ export class GameRenderer {
     this.scene.addChild(this.background, this.world, this.screenFx);
     this.world.addChild(
       this.terrain,
+      this.crowdLayer,
       this.track,
       this.decor,
       this.shadow,
@@ -168,12 +175,16 @@ export class GameRenderer {
           async ([id, path]) => [id, await Assets.load<Texture>(path)] as const,
         ),
       ),
+      document.fonts.load('20px "Lilita One"'),
+      document.fonts.load('700 20px "Nunito"'),
     ]);
     if (this.disposed) return;
     this.textures = Object.fromEntries(sprites);
     this.terrain.addChild(this.groundBase);
     this.decor.addChild(this.landingLabel);
-    this.impactEffects = new ImpactEffects(this.app);
+    this.impactEffects = new ImpactEffects(this.app, this.textures);
+    this.scene.filters = [this.impactEffects.lens.filter];
+    this.scene.filterArea = new Rectangle(0, 0, this.w, this.h);
     this.perkEffects = new PerkEffects(this.textures['bean-propulsion-cloud']);
     this.carnageEffects = new CarnageEffects(this.textures);
     this.world.addChildAt(
@@ -258,14 +269,41 @@ export class GameRenderer {
       const sprite = new Sprite(this.textures[key]);
       sprite.anchor.set(0.5);
       sprite.visible = false;
-      this.pony.addChild(sprite);
+      if (key === 'wing-right') {
+        sprite.anchor.set(0.17, 0.76);
+        this.pony.addChildAt(
+          sprite,
+          this.pony.getChildIndex(this.ponyParts.torso),
+        );
+      } else if (key === 'wing-left') {
+        sprite.anchor.set(0.83, 0.76);
+        this.pony.addChildAt(
+          sprite,
+          this.pony.getChildIndex(this.ponyParts.head),
+        );
+      } else {
+        if (key === 'jetpack')
+          sprite.anchor.set(ROCKET_ART.anchor.x, ROCKET_ART.anchor.y);
+        if (key === 'magnetic-horseshoe') sprite.anchor.set(0.5, 0.95);
+        this.pony.addChild(sprite);
+      }
       this.gear[key] = sprite;
     }
   }
   async loadWorld(id: WorldId): Promise<void> {
     if (!this.carnageLoading) {
       this.carnageLoading = Promise.all(
-        ['sausage', 'bouquet', 'skin'].map(async (key) => {
+        [
+          'sausage',
+          'bouquet',
+          'skin',
+          'heart',
+          'brain',
+          'turnstile',
+          'droplet',
+          'splat',
+          'tooth',
+        ].map(async (key) => {
           const texture = await Assets.load<Texture>(
             `/art/carnage/${key}.webp`,
           );
@@ -279,16 +317,86 @@ export class GameRenderer {
         });
     }
     await this.carnageLoading;
-    if (this.backgrounds.has(id)) return;
+    const props = SIDESHOW_ART[id];
+    if (this.backgrounds.has(id) && props.every((key) => this.textures[key]))
+      return;
     const pending = this.loading.get(id);
     if (pending) return pending;
-    const request = Assets.load<Texture>(`/art/${worldById(id).art}.webp`)
-      .then((texture) => {
-        if (!this.disposed) this.backgrounds.set(id, texture);
+    const request = Promise.all([
+      this.backgrounds.get(id) ??
+        Assets.load<Texture>(`/art/${worldById(id).art}.webp`),
+      ...props.map((key) => Assets.load<Texture>(`/art/carnage/${key}.webp`)),
+    ])
+      .then(([texture, ...illustrations]) => {
+        if (!this.disposed) {
+          this.backgrounds.set(id, texture);
+          props.forEach((key, i) => {
+            this.textures[key] = illustrations[i];
+          });
+        }
       })
       .finally(() => this.loading.delete(id));
     this.loading.set(id, request);
     return request;
+  }
+  async loadAbility(ability: Ability) {
+    if (ability !== 'dynamite' || this.textures['nuclear-cloud']) return;
+    const texture = await Assets.load<Texture>(
+      '/art/carnage/nuclear-cloud.webp',
+    );
+    if (!this.disposed) this.textures['nuclear-cloud'] = texture;
+  }
+  async prepareLevel(
+    id: WorldId,
+    pony: PonyId,
+    progress: (value: number) => void = () => {},
+    ability: Ability = 'spring',
+  ) {
+    await Promise.all([this.loadWorld(id), this.loadAbility(ability)]);
+    if (this.disposed) return;
+    progress(0.65);
+    await Promise.all([
+      document.fonts.load('20px "Lilita One"'),
+      document.fonts.load('700 20px "Nunito"'),
+    ]);
+    if (this.disposed) return;
+    const terrain = this.terrainTexture(id);
+    const appearance = [
+      'head',
+      'surprisedHead',
+      'offended-head',
+      'tail',
+      'torso',
+      'straightLeg',
+      'cube',
+    ].map((part) => this.ponyTexture(part, pony));
+    this.prepareLabels();
+    progress(0.8);
+    // Assets.load finishes decoding; prepare performs the otherwise deferred
+    // GPU uploads in small batches while the course-loading overlay is visible.
+    // Do not send existing Text nodes through Pixi 8.16 Prepare: its text hook
+    // recreates their batch data. Course labels are already rendered on the
+    // title with resident fonts and are reused unchanged across worlds.
+    await this.app.renderer.prepare.upload([
+      ...Object.values(this.textures),
+      this.backgrounds.get(id)!,
+      terrain,
+      ...appearance,
+    ]);
+    if (!this.disposed) {
+      this.impactEffects.nuclear.prepare(this.app.renderer);
+      progress(1);
+    }
+  }
+  private terrainTexture(id: WorldId) {
+    let texture = this.terrainTextures.get(id);
+    if (!texture) {
+      const g = terrainGraphic(id);
+      texture = this.app.renderer.generateTexture(g);
+      g.destroy();
+      this.terrainTextures.set(id, texture);
+    }
+    return texture;
   }
   resize(width?: number, height?: number, bottomInset = this.captionInset) {
     this.captionInset = Math.max(0, bottomInset);
@@ -304,6 +412,10 @@ export class GameRenderer {
       return;
     this.w = w;
     this.h = h;
+    if (this.scene.filterArea) {
+      this.scene.filterArea.width = w;
+      this.scene.filterArea.height = h;
+    }
     this.budget.resetSampling();
     if (this.ready) this.app.renderer.resize(this.w, this.h);
   }
@@ -315,28 +427,26 @@ export class GameRenderer {
   restoreGraphics() {
     if (!this.ready) return;
     this.budget.resetSampling();
+    // Pixi 8.16 rebinds only the first 16 texture slots on context restoration.
+    // On GPUs with larger sprite batches, clear every cached slot before the
+    // first restored draw so image-backed spectators and text upload again.
+    this.app.renderer.resetState();
+    // Canvas text releases its rasterization canvas after uploading. Drop its
+    // managed GPU references so the original labels are rasterized again.
+    for (const label of [...this.labels, this.playerLabel, this.landingLabel])
+      label.unload();
     // GPU-generated textures have no image source to upload after context loss.
     for (const texture of this.terrainTextures.values()) texture.destroy(true);
     for (const texture of this.paletteTextures.values()) texture.destroy(true);
     this.terrainTextures.clear();
     this.paletteTextures.clear();
-    this.impactEffects.dispose();
-    this.impactEffects.backdrop.destroy({ children: true });
-    this.impactEffects.container.destroy({ children: true });
-    this.impactEffects = new ImpactEffects(this.app);
-    this.world.addChildAt(
-      this.impactEffects.backdrop,
-      this.world.getChildIndex(this.actors),
-    );
-    this.impactEffects.density = this.budget.density;
-    this.fx.addChild(this.impactEffects.container);
+    this.impactEffects.restoreGraphics(this.app);
   }
   reset() {
     this.budget.resetSampling();
     this.initialized = false;
     this.framing = null;
     this.lastTime = null;
-    this.shake = 0;
     for (const p of this.particles) p.sprite.destroy();
     this.particles = [];
     this.impactEffects?.reset();
@@ -345,20 +455,6 @@ export class GameRenderer {
   }
   event(e: GameEvent) {
     if (!this.ready) return;
-    const sound = e.sound ?? e.kind;
-    const impact = [
-      'land',
-      'bounce',
-      'explosion',
-      'boneclatter',
-      'metalcrash',
-      'piano',
-      'baler',
-      'woodbreak',
-      'teethchomp',
-    ].includes(sound);
-    if (impact)
-      this.shake = Math.max(this.shake, sound === 'explosion' ? 14 : 6);
     this.impactEffects.event(e, this.reduced, this.gentle);
     this.perkEffects.event(e);
   }
@@ -379,9 +475,7 @@ export class GameRenderer {
     p.rotation = rotation;
   }
   private horse(s: GameState, time: number) {
-    const running = s.phase === 'runup' || s.phase === 'title',
-      cycle = running ? s.x / 35 : time * 4,
-      air = ['flight', 'approach'].includes(s.phase);
+    const air = ['flight', 'approach'].includes(s.phase);
     const pose = ponyPose(s, time);
     const grounded = ['title', 'countdown', 'runup', 'compression'].includes(
       s.phase,
@@ -410,9 +504,8 @@ export class GameRenderer {
         pose.legs[i],
       );
     }
-    this.ponyParts.head.texture = this.ponyTexture(
-      air ? 'surprisedHead' : 'head',
-    );
+    const headArt = air ? 'surprisedHead' : 'head';
+    this.ponyParts.head.texture = this.ponyTexture(headArt);
     this.part('head', 47, -27 + pose.headY, 71, 87, pose.headAngle);
     const combos = synergies(s.equipment).map((c) => c.id);
     const has = (id: string) => s.equipment.includes(id);
@@ -434,34 +527,53 @@ export class GameRenderer {
       p.rotation = angle;
     };
     for (const p of Object.values(this.gear)) p.visible = false;
-    gear('jetpack', has('rocket'), -34, -25, 56, 70, air ? -0.22 : 0);
+    const rocket = rocketRigPose(s);
+    gear(
+      'jetpack',
+      has('rocket'),
+      rocket.x,
+      rocket.y,
+      (ROCKET_ART.height * this.textures.jetpack.width) /
+        this.textures.jetpack.height,
+      ROCKET_ART.height,
+      rocket.angle,
+    );
     gear('tnt', s.ability === 'dynamite', -26, 10, 42, 42, -0.12);
+    // Feather roots remain planted at the shoulders while the tips sweep.
+    // The far wing sits behind the torso and the near wing below the face.
+    const wingHeight =
+      (combos.includes('poultry') ? 112 : 85) * (air ? 1 : 0.72);
     gear(
       'wing-left',
       has('wings'),
-      -30,
-      -35,
-      combos.includes('poultry') ? 95 : 63,
-      85,
-      pose.wingAngle - 0.4,
+      6,
+      -17,
+      (wingHeight * this.textures['wing-left'].width) /
+        this.textures['wing-left'].height,
+      wingHeight,
+      (air ? -0.5 : -1.35) + pose.wingAngle,
     );
     gear(
       'wing-right',
       has('wings'),
-      13,
-      -44,
-      combos.includes('poultry') ? 100 : 65,
-      85,
-      -pose.wingAngle + 0.4,
+      15,
+      -23,
+      (wingHeight * this.textures['wing-right'].width) /
+        this.textures['wing-right'].height,
+      wingHeight,
+      (air ? -0.75 : -1.65) - pose.wingAngle * 0.8,
     );
+    const hoof = this.ponyParts.frontLeg2;
+    const sole = LEG_SIZE.height * (0.985 - LEG_SIZE.anchorY);
     gear(
       'magnetic-horseshoe',
       has('magnet'),
-      28,
-      62,
-      30,
-      34,
-      Math.sin(cycle) * 0.2,
+      hoof.x - Math.sin(hoof.rotation) * sole,
+      hoof.y + Math.cos(hoof.rotation) * sole,
+      24,
+      (24 * this.textures['magnetic-horseshoe'].height) /
+        this.textures['magnetic-horseshoe'].width,
+      hoof.rotation,
     );
     gear(
       'ghost-portal-ring',
@@ -481,6 +593,7 @@ export class GameRenderer {
     this.headwear.fit(
       this.outfit.hat,
       this.ponyParts.head,
+      headArt,
       combos.includes('party'),
     );
     this.aura.clear();
@@ -528,12 +641,11 @@ export class GameRenderer {
     this.decor.addChild(t);
     this.labels.push(t);
   }
-  private rebuildLabels(s: GameState) {
-    for (const t of this.labels) t.destroy();
-    this.labels = [];
-    this.labelWorld = s.world;
+  private prepareLabels() {
+    // These signs have the same wording in every world.
+    if (this.labels.length) return;
     this.label('NO REFUNDS BEYOND THIS POINT', 580, 65, 14);
-    this.label('THE BOUNCY BIT', TRACK.trampoline, -145, 19);
+    this.label('TRAMPOLINE', TRACK.trampoline, -164, 20);
     for (let i = 1; i < 16; i++)
       this.label(`${i * 100} m`, TRACK.trampoline + i * 1000, 45, 17);
   }
@@ -547,7 +659,7 @@ export class GameRenderer {
       this.lastTime === null
         ? 0
         : Math.max(0, Math.min(0.1, time - this.lastTime));
-    if (this.labelWorld !== s.world) this.rebuildLabels(s);
+    this.prepareLabels();
     if (this.lastWorld !== s.world) {
       this.lastWorld = s.world;
       void this.loadWorld(s.world).catch(() => {});
@@ -555,6 +667,25 @@ export class GameRenderer {
     const crash =
         !!s.wreck && ['landing', 'results', 'replay'].includes(s.phase),
       title = s.phase === 'title';
+    const ponyX = title ? TITLE_PONY_X : s.x;
+    this.pony.visible = !crash;
+    this.horse(title ? { ...s, x: ponyX, y: 0 } : s, time);
+    let rig: RigBounds | undefined;
+    if (!crash) {
+      // Read the posed artwork, including wing tips and hat rims. Converting
+      // back through the world cancels the previous frame's camera transform.
+      const bounds = this.pony.getBounds();
+      const topLeft = this.world.toLocal({ x: bounds.minX, y: bounds.minY });
+      const bottomRight = this.world.toLocal({
+        x: bounds.maxX,
+        y: bounds.maxY,
+      });
+      rig = {
+        left: topLeft.x - ponyX,
+        right: bottomRight.x - ponyX,
+        top: topLeft.y - (title ? 0 : s.y),
+      };
+    }
     this.framing = frameGame(
       s,
       this.w,
@@ -568,13 +699,13 @@ export class GameRenderer {
         synergies(s.equipment).some((c) => c.id === 'party')
         ? 175
         : 120,
+      rig,
     );
     this.cameraX = this.framing.x;
     this.cameraY = this.framing.y;
     this.zoom = this.framing.zoom;
     this.initialized = true;
-    this.shake *= Math.exp(-dt * 12);
-    const shake = this.reduced ? 0 : this.shake;
+    const shake = this.reduced ? 0 : this.impactEffects.shakeAt(time);
     this.world.position.set(
       this.w * 0.5 - this.cameraX * this.zoom + Math.sin(time * 91) * shake,
       this.h * 0.58 -
@@ -612,13 +743,7 @@ export class GameRenderer {
       time,
       this.reduced,
     );
-    let terrainTexture = this.terrainTextures.get(s.world);
-    if (!terrainTexture) {
-      const g = terrainGraphic(s.world);
-      terrainTexture = this.app.renderer.generateTexture(g);
-      g.destroy();
-      this.terrainTextures.set(s.world, terrainTexture);
-    }
+    const terrainTexture = this.terrainTexture(s.world);
     const tileCount = Math.ceil((this.w + 64) / this.zoom / 1024) + 1;
     while (this.terrainTiles.length < tileCount) {
       const tile = new Sprite();
@@ -671,7 +796,6 @@ export class GameRenderer {
         GROUND_Y - 46 / this.zoom,
       );
     }
-    const cue = jumpTarget(s);
     const after = s.wreck?.aftermath;
     if (crash && after?.id === 'fence' && s.wreck!.time >= 4.2) {
       const x = after.anchorX;
@@ -719,15 +843,12 @@ export class GameRenderer {
         }
       }
     }
-    this.track
-      .roundRect(cue.start, GROUND_Y + 7, 110, 12, 6)
-      .fill({ color: 0xffd75d, alpha: 0.75 });
-    drawTrampoline(this.track, s);
+    drawTrampoline(this.track, s, this.reduced);
     const cells = spectatorCells(left, left + (this.w + 64) / this.zoom);
     while (this.spectators.length < cells.length) {
       const sprite = new Sprite();
       sprite.anchor.set(0.5, 1);
-      this.decor.addChild(sprite);
+      this.crowdLayer.addChild(sprite);
       this.spectators.push(sprite);
     }
     for (let i = 0; i < this.spectators.length; i++) {
@@ -771,12 +892,13 @@ export class GameRenderer {
         TRACK.trampoline + distance * 10 + 180,
         GROUND_Y - artFoot(spec.trap, p.width, p.height, p.rotation, 1),
       );
-      p.visible = !crash && !title;
+      p.visible = !title;
     }
     for (let i = 0; i < RINGS.length; i++) {
       const p = this.ringSprites[i];
       p.position.set(RINGS[i].x, RINGS[i].y);
-      p.visible = !crash && !title && !s.rings.includes(i);
+      p.alpha = crash ? Math.max(0, 1 - s.wreck!.time / 0.35) : 1;
+      p.visible = !title && p.alpha > 0 && !s.rings.includes(i);
       p.scale.set(1 + Math.sin(time * 3 + i) * 0.05);
     }
     if (this.best > 0) {
@@ -802,13 +924,10 @@ export class GameRenderer {
           .ellipse(b.x, GROUND_Y + 2, Math.max(8, b.w * 0.42), 5)
           .fill({ color: 0x223a30, alpha: a });
       }
-    const ponyX = title ? TITLE_PONY_X : s.x;
     if (!crash)
       this.shadow
         .ellipse(ponyX, GROUND_Y + 2, 50, 9)
         .fill({ color: 0x244237, alpha: 0.18 });
-    this.pony.visible = !crash;
-    this.horse(title ? { ...s, x: ponyX, y: 0 } : s, time);
     this.playerMarker.clear();
     this.playerLabel.visible = crash;
     if (crash) {
@@ -883,6 +1002,7 @@ export class GameRenderer {
       this.crashHeadwear.fit(
         this.outfit.hat,
         sprite,
+        head.part as HeadArt,
         synergies(s.equipment).some((c) => c.id === 'party'),
       );
       this.actors.setChildIndex(
@@ -917,8 +1037,9 @@ export class GameRenderer {
       this.zoom,
       this.reduced,
       this.budget.density,
+      this.gear.jetpack,
     );
-    this.impactEffects.update(dt, time, s, this.reduced);
+    this.impactEffects.update(time, s, this.reduced, this.world, this.gentle);
     this.carnageEffects.update(
       s,
       this.gentle,
@@ -937,6 +1058,8 @@ export class GameRenderer {
     if (this.appCreated) {
       this.appCreated = false;
       this.impactEffects?.dispose();
+      this.perkEffects?.dispose();
+      this.carnageEffects?.dispose();
       for (const texture of this.terrainTextures.values())
         texture.destroy(true);
       for (const texture of this.paletteTextures.values())
@@ -994,7 +1117,7 @@ export class GameRenderer {
       target.addChild(sprite, headwear.view);
       const canvas = this.app.renderer.extract.canvas({
         target,
-        frame: new Rectangle(-56, -90, 112, 144),
+        frame: new Rectangle(-56, -90, 136, 150),
         resolution: 1,
       });
       portraits[pony.id] = canvas.toDataURL?.('image/png') ?? '';

@@ -3,6 +3,7 @@ import type { WorldId } from './content';
 
 export const CRASH_DURATION = 14;
 export const CRASH_SETTLE_SECONDS = 0.85;
+export const NUCLEAR_LIFE = 6.2;
 // Late rebounds can outlast the choreography; retain their eventual landing.
 export const INCIDENT_WINDOW = 45;
 export const ESCALATION_AT = 8;
@@ -35,6 +36,7 @@ export interface CarnageCue {
     | 'landing'
     | 'boss'
     | 'ignite'
+    | 'nuclear'
     | 'confetti'
     | 'grab'
     | 'release';

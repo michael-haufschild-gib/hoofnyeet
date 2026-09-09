@@ -1,6 +1,7 @@
 import {
   CRASH_DURATION,
   CRASH_SETTLE_SECONDS,
+  NUCLEAR_LIFE,
   ESCALATION_AT,
   ESCALATION_BEATS,
   LANDING_SOUNDS,
@@ -25,7 +26,13 @@ import {
 import { random } from './content';
 import { CATASTROPHES } from './catastrophes';
 import { AFTERMATHS } from './landing-timeline';
-import { bossPose, drivenMechanisms, mechanismPose } from './machinery';
+import {
+  bossPose,
+  drivenMechanisms,
+  mechanismPose,
+  mechanismEntrance,
+  MACHINE_ENTRANCE,
+} from './machinery';
 import type { Action, GameEvent, GameState, LandingId } from './simulation';
 export interface BodyPose {
   id: number;
@@ -40,6 +47,7 @@ export interface BodyPose {
   boss: boolean;
   injury?: number;
   charred?: boolean;
+  arriving?: boolean;
 }
 export interface CrashFrame {
   settled?: boolean;
@@ -54,6 +62,9 @@ export interface CrashFrame {
   focusX: number;
   focusY: number;
   focusId?: number;
+  /** Recorded controlled-body velocity supports camera anticipation after kicks. */
+  velocityX?: number;
+  velocityY?: number;
   havoc: number;
   bossHits: number;
   caption: string;
@@ -83,6 +94,7 @@ interface Piece {
   injury?: number;
   charred?: boolean;
   afterRole?: 'first' | 'surprise' | 'vehicle';
+  enterAt?: number;
 }
 let initPromise: Promise<void> | undefined;
 export function initPhysics() {
@@ -105,6 +117,7 @@ export class CrashWorld {
   private helmetPunchline = false;
   private afterProp: Piece | null = null;
   private afterAnchor = 0;
+  private afterEntryY = 0;
   private laundryJoint: RAPIER.ImpulseJoint | null = null;
   private laundry: Piece | undefined;
   private verdictUntil = 0;
@@ -136,6 +149,7 @@ export class CrashWorld {
     piece: Piece;
     anchorX: number;
     startedAt: number;
+    released: boolean;
   }[] = [];
   constructor(private s: GameState) {
     this.origin = s.impactX;
@@ -726,6 +740,10 @@ export class CrashWorld {
       case 'dynamite':
         this.disassemble();
         this.burst(x, y, this.has('loose') ? 30 : 22);
+        this.cueSound(
+          this.gore('nuclear', x, y, 1, this.controlled.handle),
+          'nuclear',
+        );
         this.caption = 'THE DIAPER WAS LOAD-BEARING.';
         break;
     }
@@ -769,11 +787,11 @@ export class CrashWorld {
     const piece = this.spawn(
       part,
       at.x * SCALE + v.x * 8,
-      at.y * SCALE - 220,
+      Math.min(-700, at.y * SCALE - 700),
       w,
       h,
     );
-    piece.body.setLinvel({ x: v.x * 0.45, y: 12 }, true);
+    piece.body.setLinvel({ x: v.x * 0.45, y: 22 }, true);
     piece.afterRole = role;
     this.afterProp = piece;
     return piece;
@@ -782,7 +800,7 @@ export class CrashWorld {
     const size = fitArt('rescue', 190, 100);
     const piece = this.spawn(
       'rescue',
-      this.controlled.translation().x * SCALE - 420,
+      this.controlled.translation().x * SCALE - 900,
       GROUND_Y - artFoot('rescue', size.w, size.h),
       size.w,
       size.h,
@@ -821,10 +839,11 @@ export class CrashWorld {
           this.rescue();
           break;
         case 'accordion': {
+          this.afterEntryY = hero.body.translation().y * SCALE - 500;
           const p = this.spawn(
             'ufo',
             this.afterAnchor,
-            Math.min(-250, hero.body.translation().y * SCALE - 140),
+            Math.min(-780, hero.body.translation().y * SCALE - 500),
             180,
             140,
           );
@@ -920,6 +939,19 @@ export class CrashWorld {
       this.elapsed >= 4.2 &&
       this.elapsed < 7.4
     ) {
+      const entryAge = this.elapsed - 4.2;
+      if (entryAge < 0.9) {
+        const progress = Math.min(1, entryAge / 0.85);
+        const start = Math.min(-780, this.afterEntryY);
+        const target = Math.min(-250, this.afterEntryY + 360);
+        this.afterProp.body.setNextKinematicTranslation({
+          x: this.afterAnchor / SCALE,
+          y:
+            (start +
+              (target - start) * progress * progress * (3 - 2 * progress)) /
+            SCALE,
+        });
+      }
       const center = this.afterProp.body.translation();
       for (const piece of this.pieces.values())
         if (
@@ -991,7 +1023,7 @@ export class CrashWorld {
           const ghost = this.spawn(
             'ghost-head',
             pos.x * SCALE,
-            pos.y * SCALE - 70,
+            pos.y * SCALE,
             90,
             115,
             true,
@@ -1015,11 +1047,11 @@ export class CrashWorld {
         const helmet = this.spawn(
           'helmet',
           pos.x * SCALE,
-          pos.y * SCALE - 190,
+          Math.min(-650, pos.y * SCALE - 650),
           70,
           65,
         );
-        helmet.body.setLinvel({ x: 0, y: 15 }, true);
+        helmet.body.setLinvel({ x: 0, y: 25 }, true);
         this.afterProp = helmet;
         this.announce('YOUR HELMET WOULD LIKE A WORD.');
       });
@@ -1242,40 +1274,70 @@ export class CrashWorld {
       this.disassemble();
     });
     const spec = CATASTROPHES[this.s.world][this.s.disaster % 4];
-    this.beat('machine-warning', Math.max(0.1, spec.beat - 0.4), () => {
-      this.caption = 'LOOK OUT. THE EQUIPMENT HAS OPINIONS.';
-      this.emit('warning', this.controlled.translation().x * SCALE, -250, 0.35);
-    });
-    this.beat('machine-arrival', spec.beat, () => {
-      const target = this.controlled.translation();
-      const anchorX = target.x * SCALE + 110;
-      const size = fitArt(spec.trap, 155, 160);
-      const at = mechanismPose(spec.mechanism, 0, anchorX, {
-        part: spec.trap,
-        ...size,
-      });
-      const trap = this.spawn(spec.trap, at.x, at.y, size.w, size.h);
-      this.mechanismBodies.push({
-        piece: trap,
-        anchorX,
-        startedAt: this.elapsed,
-      });
-      this.caption = 'THIS IS PROBABLY FINE.';
-      if (drivenMechanisms.includes(spec.mechanism)) {
+    this.beat(
+      'machine-warning',
+      Math.max(0.05, spec.beat - MACHINE_ENTRANCE),
+      () => {
+        this.caption = 'LOOK OUT. THE EQUIPMENT HAS OPINIONS.';
+        this.emit(
+          'warning',
+          this.controlled.translation().x * SCALE,
+          -250,
+          0.35,
+        );
+        const target = this.controlled.translation();
+        const lead = Math.max(0, spec.beat - this.elapsed);
+        const anchorX =
+          target.x * SCALE + this.controlled.linvel().x * SCALE * lead + 110;
+        const size = fitArt(spec.trap, 155, 160);
+        const at = mechanismEntrance(spec.mechanism, -lead, anchorX, {
+          part: spec.trap,
+          ...size,
+        });
+        const trap = this.spawn(spec.trap, at.x, at.y, size.w, size.h);
+        trap.enterAt = spec.beat;
+        this.mechanismBodies.push({
+          piece: trap,
+          anchorX,
+          startedAt: spec.beat,
+          released: false,
+        });
         trap.body.setBodyType(
           RAPIER.RigidBodyType.KinematicPositionBased,
           true,
         );
-      } else trap.body.setLinvel({ x: 0, y: 14 }, true);
+        trap.body.collider(0).setEnabled(false);
+      },
+    );
+    this.beat('machine-arrival', spec.beat, () => {
+      this.caption = 'THIS IS PROBABLY FINE.';
       if (spec.mechanism === 'slide') {
         const slide = this.spawn('bone', 250, 0, 430, 35);
         slide.body.setBodyType(RAPIER.RigidBodyType.Fixed, true);
         slide.body.setRotation(0.23, true);
       }
     });
-    for (const { piece: trap, anchorX, startedAt } of this.mechanismBodies) {
+    for (const mechanism of this.mechanismBodies) {
+      const { piece: trap, anchorX, startedAt } = mechanism;
       const age = Math.min(this.elapsed, CRASH_DURATION) - startedAt,
         pos = trap.body.translation();
+      if (age < 0) {
+        const at = mechanismEntrance(spec.mechanism, age, anchorX, trap);
+        trap.body.setNextKinematicTranslation({
+          x: at.x / SCALE,
+          y: at.y / SCALE,
+        });
+        trap.body.setNextKinematicRotation(at.angle);
+        continue;
+      }
+      if (!mechanism.released) {
+        mechanism.released = true;
+        trap.body.collider(0).setEnabled(true);
+        if (!drivenMechanisms.includes(spec.mechanism)) {
+          trap.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+          trap.body.setLinvel({ x: 0, y: 14 }, true);
+        }
+      }
       if (drivenMechanisms.includes(spec.mechanism)) {
         const at = mechanismPose(spec.mechanism, age, anchorX, trap);
         trap.body.setNextKinematicTranslation({
@@ -1346,8 +1408,7 @@ export class CrashWorld {
     this.escalate();
     if (
       (this.has('magnet') &&
-        (this.elapsed < CRASH_DURATION ||
-          Math.abs(this.controlled.linvel().x) > 1)) ||
+        (this.elapsed < CRASH_DURATION || this.elapsed < this.boostUntil)) ||
       (this.s.ability === 'blackhole' && this.elapsed - this.abilityAt < 1)
     ) {
       const center = this.controlled.translation();
@@ -1601,8 +1662,11 @@ export class CrashWorld {
     this.updateSettlement(dt);
   }
   private get settled() {
+    const blast = this.carnage.find((cue) => cue.kind === 'nuclear');
     return (
-      this.elapsed >= CRASH_DURATION && this.quietTime >= CRASH_SETTLE_SECONDS
+      this.elapsed >=
+        Math.max(CRASH_DURATION, blast ? blast.at + NUCLEAR_LIFE : 0) &&
+      this.quietTime >= CRASH_SETTLE_SECONDS
     );
   }
   private connectedBodies() {
@@ -1654,6 +1718,7 @@ export class CrashWorld {
   }
   snapshot(): CrashFrame {
     const c = this.controlled.translation();
+    const velocity = this.controlled.linvel();
     return {
       settled: this.settled,
       headId: this.head.handle,
@@ -1670,6 +1735,10 @@ export class CrashWorld {
         boss: p.boss,
         injury: p.injury,
         charred: p.charred,
+        arriving:
+          p.enterAt !== undefined && this.elapsed < p.enterAt
+            ? true
+            : undefined,
       })),
       carnage: {
         cues: this.carnage.map((c) => ({ ...c })),
@@ -1699,6 +1768,8 @@ export class CrashWorld {
       focusX: this.origin + c.x * SCALE,
       focusY: c.y * SCALE,
       focusId: this.controlled.handle,
+      velocityX: velocity.x * SCALE,
+      velocityY: velocity.y * SCALE,
       havoc: this.havoc,
       bossHits: this.bossHits,
       caption: this.caption,

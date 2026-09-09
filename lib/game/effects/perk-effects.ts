@@ -3,6 +3,7 @@ import { RINGS, type GameEvent, type GameState } from '../simulation';
 import { propulsionPuff, PUFF_LIFE } from './perk-motion';
 import { ponyPose } from '../pose';
 import { LEG_HIPS } from '../geometry';
+import { RocketExhaust } from './rocket-exhaust';
 
 const ink = 0x31534b;
 const mint = 0xcef49a;
@@ -17,7 +18,7 @@ export class PerkEffects {
   private wind = new Graphics({ label: 'tailwind-gusts' });
   private trails = new Graphics({ label: 'flight-perk-trails' });
   private wear = new Graphics({ label: 'passive-equipment' });
-  private exhaust = new Graphics({ label: 'jetpack-exhaust' });
+  private exhaust = new RocketExhaust();
   private weather = new Container({ label: 'pocket-weather' });
   private puffs: Sprite[] = [];
   private bursts: GameEvent[] = [];
@@ -35,7 +36,7 @@ export class PerkEffects {
   });
 
   constructor(cloud: Texture) {
-    this.behind.addChild(this.wind, this.trails, this.exhaust);
+    this.behind.addChild(this.wind, this.trails, this.exhaust.view);
     // Fixed pool: repeated taps, replays and long flights cannot grow the scene.
     for (let i = 0; i < 32; i++) {
       const puff = new Sprite({
@@ -97,6 +98,7 @@ export class PerkEffects {
     zoom: number,
     reduced: boolean,
     density: number,
+    jetpack: Sprite,
   ) {
     const has = (id: string) => s.equipment.includes(id);
     const air = s.phase === 'flight';
@@ -113,7 +115,6 @@ export class PerkEffects {
     this.wear.clear();
     this.wind.clear();
     this.trails.clear();
-    this.exhaust.clear();
     this.weather.visible = air && has('tailwind');
     this.label.visible = false;
     this.drawWear(s, reduced ? 0 : time);
@@ -162,26 +163,14 @@ export class PerkEffects {
       }
     }
 
-    if (air && has('rocket')) {
-      const flame = reduced ? 1 : 1 + Math.sin(time * 39) * 0.18;
-      const g = this.exhaust;
-      g.position.copyFrom(pony.position);
-      g.rotation = pony.rotation;
-      g.moveTo(-54, -6)
-        .quadraticCurveTo(-75, -18, -148 * flame, 25)
-        .quadraticCurveTo(-81, 26, -51, 10)
-        .closePath()
-        .fill(0xf17c43)
-        .stroke({ color: 0x793a37, width: 2 })
-        .moveTo(-54, -4)
-        .quadraticCurveTo(-83, 0, -118 * flame, 19)
-        .quadraticCurveTo(-75, 15, -51, 9)
-        .closePath()
-        .fill(0xffe987)
-        .ellipse(-62, 5, 15, 5)
-        .fill(0xffffd9);
-    }
-    this.exhaust.visible = air && has('rocket');
+    this.exhaust.update(
+      pony,
+      jetpack,
+      time,
+      air && has('rocket'),
+      reduced,
+      density,
+    );
     this.flightAccents(s, time, x, y, readable, reduced);
     this.drawPuffs(time, readable, reduced, density);
 
@@ -424,7 +413,11 @@ export class PerkEffects {
     this.label.visible = this.weather.visible = false;
     this.wind.clear();
     this.trails.clear();
-    this.exhaust.clear();
+    this.exhaust.reset();
     this.wear.clear();
+  }
+
+  dispose() {
+    this.exhaust.dispose();
   }
 }

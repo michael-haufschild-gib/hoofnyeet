@@ -41,7 +41,8 @@ void test('kinematic hazards and bosses start on their authored path without a o
           const prev = previous.find((p) => p.id === body.id);
           if (prev)
             assert.ok(
-              Math.hypot(body.x - prev.x, body.y - prev.y) < 4,
+              Math.hypot(body.x - prev.x, body.y - prev.y) <
+                (body.arriving ? 22 : 4),
               `${world.id}/${spec.mechanism} teleported at tick ${tick}`,
             );
           assert.ok(
@@ -154,4 +155,64 @@ void test('all catastrophe arrivals fire exactly once even when another beat has
       crash.dispose();
     }
   }
+});
+
+void test('machinery enters during its warning with contacts disabled, then joins the original trajectory', async () => {
+  const { mechanismEntrance, mechanismPose, MACHINE_ENTRANCE } =
+    await import('../lib/game/machinery');
+  await initPhysics();
+  for (const world of WORLDS)
+    for (let disaster = 0; disaster < 4; disaster++) {
+      const spec = CATASTROPHES[world.id][disaster];
+      const s = createGame();
+      Object.assign(s, {
+        world: world.id,
+        disaster,
+        mod: modifiers([], world.id),
+        impactX: 2800,
+        vx: 500,
+        vy: 400,
+      });
+      const crash = new CrashWorld(s);
+      let seen = false,
+        active = false;
+      for (let tick = 0; tick < (spec.beat + 0.15) * 120; tick++) {
+        crash.step(1 / 120);
+        const frame = crash.snapshot();
+        const body = frame.bodies.find((b) => b.arriving);
+        if (body) {
+          seen = true;
+          const internal = crash as unknown as {
+            pieces: Map<
+              number,
+              { body: { collider(index: number): { isEnabled(): boolean } } }
+            >;
+          };
+          assert.equal(
+            internal.pieces.get(body.id)!.body.collider(0).isEnabled(),
+            false,
+          );
+          assert.ok(frame.time < spec.beat);
+        } else if (frame.time >= spec.beat) active = true;
+      }
+      assert.ok(
+        seen && active,
+        `${world.id}/${spec.mechanism} has an entrance and activation`,
+      );
+      const shape = { part: spec.trap, w: 150, h: 155 };
+      for (const t of [0, 0.1, 0.4, 1])
+        assert.deepEqual(
+          mechanismEntrance(spec.mechanism, t, 100, shape),
+          mechanismPose(spec.mechanism, t, 100, shape),
+        );
+      const entry = mechanismEntrance(
+          spec.mechanism,
+          -MACHINE_ENTRANCE,
+          100,
+          shape,
+        ),
+        end = mechanismPose(spec.mechanism, 0, 100, shape);
+      assert.ok(Math.hypot(entry.x - end.x, entry.y - end.y) >= 779.999);
+      crash.dispose();
+    }
 });

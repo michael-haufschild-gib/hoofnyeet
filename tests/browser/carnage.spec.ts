@@ -220,6 +220,7 @@ test('six boss finales render at actual hit thresholds and repeated crashes rele
       contentType: 'image/png',
     });
   expect(new Set(report.sizes.slice(6)).size).toBe(1);
-  expect(report.sizes.at(-1)).toBeLessThan(700);
+  // Independent decorative pools are fixed; repeated incidents may not grow them.
+  expect(report.sizes.at(-1)).toBeLessThan(1024);
   expect(errors).toEqual([]);
 });

@@ -37,6 +37,7 @@ export interface SaveData {
   music: boolean;
   effects: boolean;
   reduced: boolean;
+  controlsSeen: boolean;
   last: { distance: number; landing: LandingId }[];
 }
 export function defaultSave(): SaveData {
@@ -77,6 +78,7 @@ export function defaultSave(): SaveData {
     music: true,
     effects: true,
     reduced: false,
+    controlsSeen: false,
     last: [],
   };
 }
@@ -254,6 +256,7 @@ export function readSave(storage?: Pick<Storage, 'getItem'>): SaveData {
         d[key] = raw[key];
     for (const key of ['music', 'effects', 'reduced'] as const)
       if (typeof raw[key] === 'boolean') d[key] = raw[key];
+    d.controlsSeen = raw.controlsSeen === true || d.rounds > 0;
     if (Array.isArray(raw.landings))
       d.landings = [
         ...new Set<LandingId>(
@@ -303,6 +306,7 @@ export function finishRound(old: SaveData, s: GameState): SaveData {
   const save = {
     ...old,
     rounds: old.rounds + 1,
+    controlsSeen: true,
     best: Math.max(old.best, s.distance),
     bestStyle: Math.max(old.bestStyle, s.style),
     bestHavoc: Math.max(old.bestHavoc, s.havoc),

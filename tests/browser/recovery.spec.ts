@@ -5,6 +5,8 @@ declare global {
   interface Window {
     __hoof: GameController;
     __contextLoss: WEBGL_lose_context;
+    __restorationOrder: string[];
+    __restorationFrames: number;
   }
 }
 
@@ -26,6 +28,27 @@ test('graphics interruption pauses the attempt and restores illustrated renderin
   );
   await page.evaluate(() => {
     const c = window.__hoof;
+    window.__restorationOrder = [];
+    window.__restorationFrames = 0;
+    let restored = false;
+    c.renderer.canvas.addEventListener(
+      'webglcontextrestored',
+      () => {
+        window.__restorationOrder.push('event');
+      },
+      { once: true },
+    );
+    const restore = c.renderer.restoreGraphics.bind(c.renderer);
+    c.renderer.restoreGraphics = () => {
+      window.__restorationOrder.push('rebuild');
+      restore();
+      restored = true;
+    };
+    const draw = c.renderer.draw.bind(c.renderer);
+    c.renderer.draw = (...args) => {
+      if (restored) window.__restorationFrames++;
+      return draw(...args);
+    };
     c.save.rounds = 3;
     c.setPreference('pony', 'bubblegum');
   });
@@ -53,6 +76,10 @@ test('graphics interruption pauses the attempt and restores illustrated renderin
   expect(await page.evaluate(() => window.__hoof.state.time)).toBe(frozen.time);
   await page.evaluate(() => window.__contextLoss.restoreContext());
   await expect(page.getByText('The picture needs a moment.')).not.toBeVisible();
+  expect(await page.evaluate(() => window.__restorationOrder)).toEqual([
+    'event',
+    'rebuild',
+  ]);
   expect(
     await page.evaluate(() => {
       const c = window.__hoof;
@@ -65,6 +92,11 @@ test('graphics interruption pauses the attempt and restores illustrated renderin
     }),
   ).toEqual(frozen);
   expect(await page.evaluate(() => window.__hoof.state.paused)).toBe(true);
+  // Controller must repaint the recovered picture even while paused. Calling
+  // draw directly below cannot substitute for the actual restoration frame.
+  await expect
+    .poll(() => page.evaluate(() => window.__restorationFrames))
+    .toBeGreaterThan(0);
   const pixel = await page.evaluate(() => {
     const r = window.__hoof.renderer;
     r.draw(window.__hoof.state, 0, window.__hoof.state.time);

@@ -1,5 +1,6 @@
-import type { GameState } from './simulation';
+import { TRACK, jumpTarget, type GameState } from './simulation';
 import { GROUND_Y } from './geometry';
+import { nuclearPose } from './effects/nuclear-motion';
 
 export interface CameraFrame {
   x: number;
@@ -8,6 +9,13 @@ export interface CameraFrame {
   ground: number;
   subjectTop: number;
   safeTop: number;
+}
+
+/** Painted rig bounds relative to the controlled pony's simulation position. */
+export interface RigBounds {
+  left: number;
+  right: number;
+  top: number;
 }
 
 export const TITLE_PONY_X = 180;
@@ -23,15 +31,18 @@ export function frameGame(
   bottomInset = 0,
   topInset?: number,
   headroom = 120,
+  rig?: RigBounds,
 ): CameraFrame {
   const crash = !!s.wreck && ['landing', 'results', 'replay'].includes(s.phase);
   const short = height < 350;
   const portrait = width < 600 || height > width;
+  if (rig && !crash) headroom = Math.max(120, -rig.top);
   if (s.phase === 'title') {
     // Match the title's container query, including portrait tablets.
     const stacked = width <= 600 || (width <= 900 && height >= width);
     const zoom = Math.min(
-      (width * (stacked ? 0.68 : 0.42)) / 180,
+      (width * (stacked ? 0.68 : 0.42)) /
+        Math.max(180, rig ? rig.right - rig.left : 180),
       (height * (stacked ? (width > 600 ? 0.33 : 0.29) : 0.62)) /
         Math.max(135, headroom),
       stacked ? 3.4 : 4.6,
@@ -43,8 +54,16 @@ export function frameGame(
     const ground = stacked
       ? Math.min(height * 0.48, height - 355)
       : height * 0.5 + (135 * zoom) / 2;
+    let x = TITLE_PONY_X - (stacked ? 0 : (width * 0.25) / zoom);
+    if (rig) {
+      const reach = (width / 2 - 20) / zoom;
+      x = Math.max(
+        TITLE_PONY_X + rig.right - reach,
+        Math.min(TITLE_PONY_X + rig.left + reach, x),
+      );
+    }
     return {
-      x: TITLE_PONY_X - (stacked ? 0 : (width * 0.25) / zoom),
+      x,
       y: GROUND_Y - (ground - height * 0.58) / zoom,
       zoom,
       ground,
@@ -67,14 +86,16 @@ export function frameGame(
     ? (Math.abs(Math.cos(focusBody.angle)) * focusBody.w +
         Math.abs(Math.sin(focusBody.angle)) * focusBody.h) /
       2
-    : 50;
+    : rig
+      ? Math.max(Math.abs(rig.left), Math.abs(rig.right))
+      : 50;
   let radiusY = focusBody
     ? (Math.abs(Math.sin(focusBody.angle)) * focusBody.w +
         Math.abs(Math.cos(focusBody.angle)) * focusBody.h) /
       2
     : 70;
-  if (focusBody && focusBody.id === s.wreck?.headId && headroom > 120)
-    radiusY += 60;
+  const hatClearance = headroom > 120 ? 60 : 0;
+  if (focusBody && focusBody.id === s.wreck?.headId) radiusY += hatClearance;
   const afterProp = crash
     ? s.wreck!.bodies.find((body) => body.id === s.wreck!.aftermath?.propId)
     : undefined;
@@ -82,21 +103,51 @@ export function frameGame(
     ? s.wreck!.carnage?.cues.find((c) => c.kind === 'landing' && c.stage === 0)
     : undefined;
   const showScene = scene && Math.abs(scene.x - focusX) < 600;
-  const sceneLeft = showScene
+  const blastCue = crash
+    ? s.wreck!.carnage?.cues.find((c) => c.kind === 'nuclear')
+    : undefined;
+  const blast = blastCue && nuclearPose(blastCue, s.wreck!.time, reduced);
+  const showBlast =
+    blast && Math.abs(blast.x - focusX) < 950 && blast.alpha > 0.08;
+  let sceneLeft = showScene
     ? Math.min(focusX - radiusX, scene.x - 230)
     : focusX - radiusX;
-  const sceneRight = showScene
+  let sceneRight = showScene
     ? Math.max(focusX + radiusX, scene.x + 240)
     : focusX + radiusX;
+  if (showBlast) {
+    sceneLeft = Math.min(sceneLeft, blast.x - blast.width / 2);
+    sceneRight = Math.max(sceneRight, blast.x + blast.width / 2);
+  }
   const subjectTop = Math.min(
-    showScene ? -250 : -110,
+    -110,
     focusY - (crash ? Math.max(100, radiusY + 30) : headroom),
-    afterProp
+  );
+  // Incoming machinery may begin above the frame. It influences the desired
+  // shot, never the immediate visibility clamp: forcing a newly spawned piano
+  // into view used to shrink the entire scene by almost half in one frame.
+  const sceneTop = Math.min(
+    subjectTop,
+    showScene ? -250 : -110,
+    showBlast ? blast.cloudY - Math.max(blast.height, 650) - 20 : 0,
+    afterProp &&
+      Math.abs(afterProp.x - focusX) < 900 &&
+      afterProp.y > focusY - 420
       ? afterProp.y - Math.hypot(afterProp.w, afterProp.h) * 0.5 - 20
       : 0,
   );
   // Anticipate upward motion so a flap does not push the pony into the HUD.
-  const anticipatedTop = subjectTop - (crash ? 0 : Math.max(0, -s.vy) * 0.16);
+  const velocityY = crash ? (s.wreck!.velocityY ?? 0) : s.vy;
+  // Reserve the physical handoff and headwear while a displacement ability is
+  // ready. Otherwise the visibility clamp snaps the lens on the ejection tick.
+  const handoffRoom =
+    crash && s.wreck!.abilityReady && ['eject', 'ghost'].includes(s.ability)
+      ? 64 + (s.ability === 'eject' ? hatClearance : 0)
+      : 0;
+  const anticipatedTop = Math.min(
+    sceneTop,
+    subjectTop - Math.max(0, -velocityY) * 0.2 - handoffRoom,
+  );
   const nominal = crash
     ? portrait
       ? Math.min(2.8, width / 260)
@@ -105,10 +156,10 @@ export function frameGame(
       ? Math.min(1.15, width / 620)
       : Math.min(1.45, width / 520);
   const available = Math.max(45, ground - safeTop);
-  const targetZoom = Math.min(
+  let targetZoom = Math.min(
     nominal,
     available / (GROUND_Y - anticipatedTop),
-    showScene ? (width - 36) / (sceneRight - sceneLeft) : Infinity,
+    showScene || showBlast ? (width - 36) / (sceneRight - sceneLeft) : Infinity,
   );
   // Portrait needs room behind the pony for the weather companion and fart
   // plume. Reserve it for the whole flight to avoid panning on every tap.
@@ -116,21 +167,41 @@ export function frameGame(
     portrait &&
     s.phase === 'flight' &&
     (s.equipment.includes('beans') || s.equipment.includes('tailwind'));
-  const targetX = showScene
-    ? (sceneLeft + sceneRight) / 2
-    : focusX +
-      (s.phase === 'runup'
-        ? portrait
-          ? 85
-          : 160
-        : crash
-          ? 60
-          : rearPerks
-            ? -45
-            : 110);
-  const blend = reduced || !previous ? 1 : 1 - Math.exp(-dt * 5);
+  let targetX =
+    showScene || showBlast
+      ? (sceneLeft + sceneRight) / 2
+      : focusX +
+        (s.phase === 'runup'
+          ? portrait
+            ? 85
+            : 160
+          : crash
+            ? 60
+            : rearPerks
+              ? -45
+              : 110);
+  if (['runup', 'approach', 'compression'].includes(s.phase)) {
+    const cue = jumpTarget(s);
+    const lead = Math.max(0, Math.min(1, (s.x - (cue.start - 500)) / 400));
+    const launchLeft = Math.min(s.x + (rig?.left ?? -85) - 25, cue.start - 25);
+    const launchRight = TRACK.trampoline + 165;
+    const launchZoom = Math.min(
+      targetZoom,
+      (width - 40) / Math.max(260, launchRight - launchLeft),
+      available / 215,
+    );
+    targetZoom *= Math.pow(launchZoom / targetZoom, lead);
+    targetX += ((launchLeft + launchRight) / 2 - targetX) * lead;
+  }
+  const blend = !previous ? 1 : 1 - Math.exp(-dt * (reduced ? 3 : 5));
+  // Zoom perceptually (a percentage of the current scale), with a bounded lens
+  // speed. A departing UFO must not cause a rapid push-in onto the ground.
+  const zoomDelta = previous ? Math.log(targetZoom / previous.zoom) * blend : 0;
   let zoom = previous
-    ? previous.zoom + (targetZoom - previous.zoom) * blend
+    ? previous.zoom *
+      Math.exp(
+        Math.max(-dt * 1.8, Math.min(dt * (reduced ? 0.75 : 1.15), zoomDelta)),
+      )
     : targetZoom;
   // Smoothing must never override visibility, including after a resize or ejection.
   zoom = Math.min(

@@ -1,14 +1,21 @@
-import { CARNAGE_SOUNDS } from './escalation';
+import {
+  eventAudio,
+  levelAudio,
+  MUSIC_AUDIO,
+  soundPriority,
+  type AudioId,
+} from './audio-assets';
 import type { GameEvent, GameState } from './simulation';
-import { worldById } from './content';
+import { worldById, type WorldId } from './content';
 export class HorseAudio {
   context: AudioContext | null = null;
-  music = true;
-  effects = true;
+  private musicEnabled = true;
+  private effectsEnabled = true;
   private master: GainNode | null = null;
   private output: GainNode | null = null;
   private trackGain: GainNode | null = null;
   private musicGain: GainNode | null = null;
+  private duckGain: GainNode | null = null;
   private effectGain: GainNode | null = null;
   private recording: MediaStreamAudioDestinationNode | null = null;
   private buffers = new Map<string, AudioBuffer>();
@@ -16,11 +23,30 @@ export class HorseAudio {
   private source: AudioBufferSourceNode | null = null;
   private musicId = '';
   private musicRequest = 0;
-  private voices = new Set<AudioBufferSourceNode>();
+  private voices = new Map<
+    AudioBufferSourceNode,
+    { priority: number; gain: GainNode }
+  >();
   private hoof = 0;
   private disposed = false;
   private played = new Set<string>();
+  private requests = new Set<AbortController>();
+  get music() {
+    return this.musicEnabled;
+  }
+  set music(enabled: boolean) {
+    this.musicEnabled = enabled;
+    if (this.musicGain) this.musicGain.gain.value = enabled ? 0.28 : 0;
+  }
+  get effects() {
+    return this.effectsEnabled;
+  }
+  set effects(enabled: boolean) {
+    this.effectsEnabled = enabled;
+    if (this.effectGain) this.effectGain.gain.value = enabled ? 1 : 0;
+  }
   async unlock() {
+    if (this.disposed) return;
     try {
       if (!this.context) {
         this.context = new AudioContext();
@@ -44,78 +70,61 @@ export class HorseAudio {
         limiter.connect(this.output);
         this.output.connect(this.context.destination);
         this.musicGain = this.context.createGain();
-        this.musicGain.gain.value = 0.28;
-        this.musicGain.connect(this.master);
+        this.musicGain.gain.value = this.music ? 0.28 : 0;
+        // Impact automation belongs to a separate envelope. It must never
+        // overwrite the user's mute gate, even between animation frames.
+        this.duckGain = this.context.createGain();
+        this.musicGain.connect(this.duckGain);
+        this.duckGain.connect(this.master);
         this.effectGain = this.context.createGain();
+        this.effectGain.gain.value = this.effects ? 1 : 0;
         this.effectGain.connect(this.master);
-        for (const id of [
-          ...CARNAGE_SOUNDS,
-          'gallop',
-          'flip',
-          'ring',
-          'ui-click',
-          'honk',
-          'warning',
-          'rebound',
-          'explosion',
-          'woodbreak',
-          'metalcrash',
-          'glassbreak',
-          'teethchomp',
-          'baler',
-          'piano',
-          'stamp',
-          'ghost',
-          'ufo',
-          'splat',
-          'water',
-          'sheep',
-          'goose',
-          'crowd',
-          'laugh',
-          'eject',
-          'blackhole',
-          'equip',
-          'upgrade',
-          'insurance',
-          'win',
-          'lose',
-          'fanfare',
-          'wind',
-          'boing',
-          'flap',
-          'kick',
-          'squish',
-          'coin',
-          'jump',
-          'boneclatter',
-        ])
-          void this.load(id);
       }
       if (this.context.state === 'suspended') await this.context.resume();
     } catch {
       /* Silent play remains available. */
     }
   }
-  private load(id: string): Promise<AudioBuffer | null> {
+  private load(id: AudioId): Promise<AudioBuffer | null> {
     if (this.buffers.has(id)) return Promise.resolve(this.buffers.get(id)!);
     const pending = this.loading.get(id);
     if (pending) return pending;
-    const request = fetch(`/audio/${id}.mp3`)
+    const context = this.context;
+    if (!context || this.disposed) return Promise.resolve(null);
+    const abort = new AbortController();
+    this.requests.add(abort);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const cancelled = new Promise<never>((_, reject) => {
+      abort.signal.addEventListener(
+        'abort',
+        () => reject(new Error('Audio preparation interrupted')),
+        { once: true },
+      );
+      timeout = setTimeout(() => abort.abort(), 20000);
+    });
+    const decoded = fetch(`/audio/${id}.mp3`, { signal: abort.signal })
       .then((r) => {
         if (!r.ok) throw new Error('Audio unavailable');
         return r.arrayBuffer();
       })
-      .then((b) => this.context!.decodeAudioData(b))
+      .then((b) => context.decodeAudioData(b));
+    // AbortController alone cannot settle a stalled native audio decoder.
+    const request = Promise.race([decoded, cancelled])
       .then((b) => {
+        if (this.disposed || abort.signal.aborted) return null;
         this.buffers.set(id, b);
         return b;
       })
-      .catch(() => null);
+      .catch(() => null)
+      .finally(() => {
+        clearTimeout(timeout);
+        this.requests.delete(abort);
+        this.loading.delete(id);
+      });
     this.loading.set(id, request);
     return request;
   }
-  private sample(id: string, volume = 1, rate = 1) {
+  private sample(id: AudioId, volume = 1, rate = 1) {
     const c = this.context;
     if (!c || c.state !== 'running' || !this.effects || this.disposed) return;
     const b = this.buffers.get(id);
@@ -124,7 +133,22 @@ export class HorseAudio {
       this.note(150, 0.06, 0.035);
       return;
     }
-    if (this.voices.size >= 10) return;
+    const priority = soundPriority(id);
+    if (this.voices.size >= 10) {
+      let victim: AudioBufferSourceNode | undefined,
+        lowest = priority;
+      for (const [voice, meta] of this.voices) {
+        if (meta.priority < lowest) {
+          victim = voice;
+          lowest = meta.priority;
+        }
+      }
+      if (!victim) return;
+      victim.stop();
+      victim.disconnect();
+      this.voices.get(victim)!.gain.disconnect();
+      this.voices.delete(victim);
+    }
     const source = c.createBufferSource(),
       gain = c.createGain();
     source.buffer = b;
@@ -132,7 +156,7 @@ export class HorseAudio {
     gain.gain.value = volume * 0.65;
     source.connect(gain);
     gain.connect(this.effectGain!);
-    this.voices.add(source);
+    this.voices.set(source, { priority, gain });
     source.start();
     source.onended = () => {
       source.disconnect();
@@ -165,48 +189,34 @@ export class HorseAudio {
       if (this.played.size > 500)
         this.played.delete(this.played.values().next().value!);
     }
-    const names: Record<string, string> = {
-      tap: 'gallop',
-      bounce: 'boing',
-      land: 'squish',
-      crunch: 'boneclatter',
-      record: 'win',
-      count: 'ui-click',
-    };
-    const sound = e.sound ?? names[e.kind] ?? e.kind;
     if (e.propulsion) {
       // The bundled comic squish becomes a low raspberry on the same flap beat.
       this.sample('squish', 0.85, e.propulsion.power > 1 ? 0.58 : 0.76);
       this.sample('flap', 0.35);
     } else {
-      this.sample(
-        sound,
-        e.kind === 'tap' ? 0.22 : e.value && e.value < 1 ? e.value : 1,
-      );
+      for (const sound of eventAudio(e))
+        this.sample(
+          sound,
+          e.kind === 'tap' ? 0.22 : e.value && e.value < 1 ? e.value : 1,
+        );
     }
-    if (this.musicGain && ['crunch', 'land'].includes(e.kind)) {
+    if (this.duckGain && ['crunch', 'land'].includes(e.kind)) {
       const c = this.context!;
-      this.musicGain.gain.cancelScheduledValues(c.currentTime);
-      this.musicGain.gain.setTargetAtTime(0.08, c.currentTime, 0.02);
-      this.musicGain.gain.setTargetAtTime(
-        this.music ? 0.28 : 0,
-        c.currentTime + 0.4,
-        0.2,
-      );
+      this.duckGain.gain.cancelScheduledValues(c.currentTime);
+      this.duckGain.gain.setTargetAtTime(0.08 / 0.28, c.currentTime, 0.02);
+      this.duckGain.gain.setTargetAtTime(1, c.currentTime + 0.4, 0.2);
     }
   }
-  private async changeMusic(id: string) {
+  private async changeMusic(id: AudioId) {
     if (id === this.musicId) return;
     this.musicId = id;
     const request = ++this.musicRequest;
     const buffer = await this.load(id);
-    if (
-      !buffer ||
-      request !== this.musicRequest ||
-      this.disposed ||
-      !this.context
-    )
+    if (request !== this.musicRequest || this.disposed || !this.context) return;
+    if (!buffer) {
+      this.musicId = '';
       return;
+    }
     const c = this.context,
       old = this.source,
       oldGain = this.trackGain;
@@ -237,15 +247,11 @@ export class HorseAudio {
   tick(s: GameState) {
     const c = this.context;
     if (!c || c.state !== 'running' || s.paused) return;
-    this.effectGain!.gain.value = this.effects ? 1 : 0;
-    if (!this.music) this.musicGain!.gain.value = 0;
-    else if (this.musicGain!.gain.value === 0)
-      this.musicGain!.gain.value = 0.28;
-    const id =
+    const id: AudioId =
       s.phase === 'title'
         ? 'main'
         : s.boss
-          ? `boss-act${worldById(s.world).act + 1}`
+          ? (`boss-act${worldById(s.world).act + 1}` as AudioId)
           : s.world;
     void this.changeMusic(id);
     if (this.effects && s.phase === 'runup' && c.currentTime > this.hoof) {
@@ -254,29 +260,50 @@ export class HorseAudio {
     }
   }
   async prepare(events: GameEvent[], s: GameState) {
-    await Promise.all(
-      [
-        'main',
-        ...(events.some((e) => e.propulsion) ? ['squish'] : []),
-        s.world,
-        s.boss ? `boss-act${worldById(s.world).act + 1}` : s.world,
-        ...events.map(
-          (e) =>
-            e.sound ??
-            (
-              {
-                bounce: 'boing',
-                land: 'squish',
-                crunch: 'boneclatter',
-                record: 'win',
-                count: 'ui-click',
-                tap: 'gallop',
-              } as Record<string, string>
-            )[e.kind] ??
-            e.kind,
-        ),
-      ].map((id) => this.load(id)),
+    const tracks = levelAudio(s.world, s.boss).filter((id) =>
+      MUSIC_AUDIO.includes(id as (typeof MUSIC_AUDIO)[number]),
     );
+    await this.preload([...tracks, ...events.flatMap(eventAudio)]);
+  }
+  async prepareLevel(
+    world: WorldId,
+    boss: boolean,
+    progress: (value: number) => void = () => {},
+  ) {
+    const ids = levelAudio(world, boss);
+    await this.preload(ids, progress);
+    // Keep shared effects and this course's tracks; long decoded music buffers
+    // do not accumulate over a nine-event tour. Playing sources own their buffer.
+    for (const id of MUSIC_AUDIO)
+      if (!ids.includes(id)) this.buffers.delete(id);
+  }
+  private async preload(
+    ids: AudioId[],
+    progress: (value: number) => void = () => {},
+  ) {
+    // AudioContext can be unavailable. A suspended context still decodes assets;
+    // readiness must never wait for a second autoplay permission gesture.
+    if (!this.context || this.disposed) {
+      progress(1);
+      return;
+    }
+    const queue = [...new Set(ids)];
+    let next = 0,
+      complete = 0;
+    const missing: AudioId[] = [];
+    await Promise.all(
+      Array.from({ length: Math.min(6, queue.length) }, async () => {
+        while (next < queue.length && !this.disposed) {
+          const id = queue[next++];
+          if (!(await this.load(id))) missing.push(id);
+          progress(++complete / queue.length);
+        }
+      }),
+    );
+    if (missing.length && !this.disposed)
+      throw new Error(
+        'Some sounds could not load. Check your connection and try again.',
+      );
   }
   recordingStream() {
     if (!this.context || !this.output) return null;
@@ -286,17 +313,31 @@ export class HorseAudio {
   }
   reset() {
     this.played.clear();
+    if (this.context && this.duckGain) {
+      this.duckGain.gain.cancelScheduledValues(this.context.currentTime);
+      this.duckGain.gain.value = 1;
+    }
+    for (const [voice, meta] of this.voices) {
+      try {
+        voice.stop();
+      } catch {
+        /* An already-ended voice is harmless. */
+      }
+      voice.disconnect();
+      meta.gain.disconnect();
+    }
+    this.voices.clear();
+    this.hoof = 0;
   }
   pause() {
     void this.context?.suspend().catch(() => {});
   }
   dispose() {
     this.disposed = true;
-    for (const v of this.voices) {
-      try {
-        v.stop();
-      } catch {}
-    }
+    for (const request of this.requests) request.abort();
+    this.requests.clear();
+    this.buffers.clear();
+    this.reset();
     try {
       this.source?.stop();
     } catch {}

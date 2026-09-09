@@ -1,7 +1,7 @@
 import { INCIDENT_WINDOW } from './escalation';
 import { GameRenderer } from './renderer';
 import { HorseAudio } from './audio';
-import { replayFrame } from './replay';
+import { replayFrame, replayEvent, replayLeadIn } from './replay';
 import type { Recording } from './controller';
 export interface Incident {
   id: string;
@@ -141,7 +141,12 @@ export async function exportClip(
     await renderer.load();
     if (recording.appearance) Object.assign(renderer, recording.appearance);
     renderer.resize(width, actionHeight);
-    await renderer.loadWorld(recording.frames[0].world);
+    await renderer.prepareLevel(
+      recording.frames[0].world,
+      renderer.ponyId,
+      undefined,
+      recording.frames[0].ability,
+    );
     await audio.prepare(recording.events, recording.frames[0]);
     if (options.signal.aborted)
       throw new DOMException('Export cancelled', 'AbortError');
@@ -178,6 +183,8 @@ export async function exportClip(
     let last = performance.now(),
       elapsed = 0,
       eventIndex = 0;
+    for (const event of replayLeadIn(recording.events, recording.frames, first))
+      renderer.event(event);
     recorder.start();
     while (elapsed < duration) {
       await new Promise<void>((resolve) =>
@@ -204,7 +211,7 @@ export async function exportClip(
         const e = recording.events[eventIndex++];
         if ((e.time ?? 0) >= first) {
           audio.event(e);
-          renderer.event(e);
+          renderer.event(replayEvent(e, recording.frames));
         }
       }
       renderer.draw(frame, dt, frame.time);
@@ -267,7 +274,12 @@ export async function incidentCard(recording: Recording): Promise<Blob> {
     await renderer.load();
     if (recording.appearance) Object.assign(renderer, recording.appearance);
     renderer.resize(1200, 800);
-    await renderer.loadWorld(frame.world);
+    await renderer.prepareLevel(
+      frame.world,
+      renderer.ponyId,
+      undefined,
+      frame.ability,
+    );
     renderer.draw(frame, 1, frame.time);
     const c = document.createElement('canvas');
     c.width = 1200;

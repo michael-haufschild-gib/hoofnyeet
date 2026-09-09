@@ -139,3 +139,78 @@ void test('outfit changes stay on their recorded frame boundary and preserve old
     undefined,
   );
 });
+
+void test('older event timestamps map through recorded hit freezes without changing the archive', async () => {
+  const { replayEvent } = await import('../lib/game/replay');
+  const a = {
+    ...createGame(),
+    phase: 'flight' as const,
+    time: 10,
+    sceneTime: 8,
+  };
+  const b = { ...a, time: 10.2 };
+  const c = { ...b, time: 10.4, sceneTime: 8.2 };
+  const old = { kind: 'land' as const, x: 10, y: -20, time: 10.1 };
+  assert.equal(replayEvent(old, [a, b, c]).sceneTime, 8);
+  assert.ok(
+    Math.abs(replayEvent({ ...old, time: 10.3 }, [a, b, c]).sceneTime! - 8.1) <
+      1e-8,
+  );
+  assert.equal('sceneTime' in old, false);
+  const current = { ...old, sceneTime: 7.98 };
+  assert.equal(replayEvent(current, [a, b, c]), current);
+});
+
+void test('clip lead-in preserves living effects through a frozen clock without replaying older or future beats', async () => {
+  const { replayLeadIn } = await import('../lib/game/replay');
+  const frames = [
+    { ...createGame(), time: 6, sceneTime: 4 },
+    { ...createGame(), time: 10, sceneTime: 6 },
+    { ...createGame(), time: 10.2, sceneTime: 6 },
+  ];
+  const events = [
+    {
+      kind: 'flap' as const,
+      id: 'expired',
+      x: 0,
+      y: 0,
+      time: 6,
+      sceneTime: 3.99,
+    },
+    {
+      kind: 'flap' as const,
+      id: 'living',
+      x: 0,
+      y: 0,
+      time: 9.8,
+      sceneTime: 5.99,
+    },
+    { kind: 'land' as const, id: 'legacy', x: 0, y: 0, time: 10.05 },
+    {
+      kind: 'land' as const,
+      id: 'at-cut',
+      x: 0,
+      y: 0,
+      time: 10.1,
+      sceneTime: 6,
+    },
+    {
+      kind: 'land' as const,
+      id: 'future',
+      x: 0,
+      y: 0,
+      time: 10.15,
+      sceneTime: 6,
+    },
+  ];
+  const original = JSON.stringify(events);
+  const lead = replayLeadIn(events, frames, 10.1);
+  assert.deepEqual(
+    lead.map((event) => event.id),
+    ['living', 'legacy'],
+  );
+  assert.equal(lead[0].sceneTime, 5.99);
+  assert.equal(lead[1].sceneTime, 6);
+  assert.equal(JSON.stringify(events), original);
+  assert.deepEqual(replayLeadIn(events, [], 10.1), []);
+});

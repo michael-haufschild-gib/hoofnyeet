@@ -2,7 +2,10 @@ import { chromium } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { localUrl } from './local-url.mjs';
 
-const browser = await chromium.launch({ args: ['--mute-audio'] });
+const browser = await chromium.launch({
+  headless: process.env.HOOF_HEADED !== '1',
+  args: ['--mute-audio'],
+});
 const viewport = {
   width: Number(process.env.HOOF_WIDTH ?? 1280),
   height: Number(process.env.HOOF_HEIGHT ?? 720),
@@ -35,7 +38,12 @@ page.context().on('response', (response) => {
 });
 try {
   await fs.mkdir('output/playwright', { recursive: true });
-  await page.goto(localUrl('preview'));
+  const url = localUrl('preview');
+  const response = await page.goto(url);
+  if (!response?.ok())
+    throw new Error(
+      `Production preview returned ${response?.status()} at ${url}. Start pnpm preview first.`,
+    );
   await page.getByRole('button', { name: 'Quick play', exact: true }).waitFor();
   await page.waitForFunction(
     () =>
@@ -57,6 +65,22 @@ try {
     );
   await page.screenshot({ path: 'output/playwright/production-home.png' });
   await page.getByRole('button', { name: 'Quick play', exact: true }).click();
+  await page.getByRole('button', { name: 'LET’S GO', exact: true }).click();
+  const pads = mobile
+    ? await Promise.all(
+        ['primary', 'secondary'].map(async (action) => {
+          const box = await page.locator(`.action-pad.${action}`).boundingBox();
+          if (!box) throw new Error(`Missing ${action} touch control`);
+          return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        }),
+      )
+    : null;
+  const tap = async (primary) => {
+    if (pads) {
+      const point = pads[primary ? 0 : 1];
+      await page.touchscreen.tap(point.x, point.y);
+    } else await page.keyboard.press(primary ? 'Space' : 'ArrowUp');
+  };
   await page.evaluate(() => {
     const frames = { durations: [], last: 0, active: true };
     window.__frameMeasurement = frames;
@@ -73,24 +97,24 @@ try {
     if (await page.getByRole('region', { name: 'Attempt results' }).isVisible())
       break;
     if (await page.locator('.timing-cue.jump-now').isVisible())
-      await page.keyboard.press('ArrowUp');
+      await tap(false);
     else if (
       await page
         .getByRole('button', { name: 'RUN', exact: true })
         .isEnabled()
         .catch(() => false)
     )
-      await page.keyboard.press('Space');
+      await tap(true);
     else if (
       await page.getByRole('button', { name: 'FLAP', exact: true }).isVisible()
     ) {
-      if (tick % 7 === 0) await page.keyboard.press('Space');
-      if (tick % 10 === 0) await page.keyboard.press('ArrowUp');
+      if (tick % 7 === 0) await tap(true);
+      if (tick % 10 === 0) await tap(false);
     } else if (
       await page.getByRole('button', { name: 'KICK', exact: true }).isVisible()
     ) {
-      if (tick % 15 === 0) await page.keyboard.press('Space');
-      if (tick % 20 === 0) await page.keyboard.press('ArrowUp');
+      if (tick % 15 === 0) await tap(true);
+      if (tick % 20 === 0) await tap(false);
     }
     await page.waitForTimeout(60);
   }
@@ -100,7 +124,13 @@ try {
     const measurement = window.__frameMeasurement;
     measurement.active = false;
     const samples = measurement.durations.sort((a, b) => a - b);
+    const canvas = document.querySelector('canvas');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    const rendererInfo = gl?.getExtension('WEBGL_debug_renderer_info');
     return {
+      gpu: rendererInfo
+        ? gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL)
+        : gl?.getParameter(gl.RENDERER),
       frames: samples.length,
       fps:
         (1000 * samples.length) / samples.reduce((total, ms) => total + ms, 0),
@@ -124,6 +154,7 @@ try {
     ...download,
     viewport,
     mobileEmulation: mobile,
+    input: mobile ? 'native touch' : 'keyboard',
     firstAttemptBytes,
     rendering,
     result: await result.innerText(),

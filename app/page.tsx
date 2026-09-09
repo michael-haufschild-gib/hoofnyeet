@@ -86,6 +86,8 @@ const initial: ViewState = {
   ready: false,
   error: '',
   graphicsLost: false,
+  preparation: null,
+  tutorial: false,
   newBest: false,
   newHats: [],
   fps: 60,
@@ -933,7 +935,7 @@ export default function Home() {
             {notice && <p className="inline-notice">{notice}</p>}
           </section>
         )}
-        {s.paused && playing && (
+        {s.paused && playing && !view.tutorial && (
           <div className="pause-screen">
             <h2>Paused.</h2>
             <button
@@ -956,6 +958,28 @@ export default function Home() {
             </button>
           </div>
         )}
+        {view.preparation && !view.preparation.failed && !view.graphicsLost && (
+          <output className="course-loading" aria-live="polite">
+            <div className="course-loading-card">
+              <span className="loading-hoof" aria-hidden="true">
+                ✦
+              </span>
+              <b>Preparing course</b>
+              <progress
+                aria-label="Course assets"
+                max={1}
+                value={view.preparation.progress}
+              />
+              <span>{Math.round(view.preparation.progress * 100)}%</span>
+              <button
+                className="text-button"
+                onClick={() => controller.current?.home()}
+              >
+                Back
+              </button>
+            </div>
+          </output>
+        )}
         {(view.error || view.graphicsLost) && (
           <div className="error-panel" role="alert">
             <b>
@@ -969,7 +993,11 @@ export default function Home() {
             </p>
             <button
               className="start-button"
-              onClick={() => window.location.reload()}
+              onClick={() =>
+                view.preparation && !view.graphicsLost
+                  ? void controller.current?.launch(view.preparation.world)
+                  : window.location.reload()
+              }
             >
               {view.graphicsLost ? 'RELOAD GAME' : 'TRY AGAIN'}
             </button>
@@ -1732,6 +1760,49 @@ export default function Home() {
               </>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={view.tutorial}
+        onOpenChange={(open) => {
+          if (!open) {
+            controller.current?.dismissTutorial();
+            focus();
+          }
+        }}
+      >
+        <DialogContent className="first-run-guide" showCloseButton={false}>
+          <DialogTitle>How to play</DialogTitle>
+          <DialogDescription>
+            Keep tapping to build speed. Jump when the arrow turns green.
+          </DialogDescription>
+          <div className="first-run-actions">
+            <div className="first-run-action">
+              <Zap className="lesson-icon" size={34} aria-hidden="true" />
+              <b>Tap to run</b>
+              {controlKey('primary')}
+              <span>
+                In air: <strong>Flap</strong>
+              </span>
+            </div>
+            <div className="first-run-action jump-lesson">
+              <ArrowUp className="lesson-icon" size={34} aria-hidden="true" />
+              <b>Jump on green</b>
+              {controlKey('secondary')}
+              <span>
+                In air: <strong>Roll</strong>
+              </span>
+            </div>
+          </div>
+          <button
+            className="start-button"
+            onClick={() => {
+              controller.current?.dismissTutorial();
+              focus();
+            }}
+          >
+            LET’S GO <Play size={20} />
+          </button>
         </DialogContent>
       </Dialog>
       <span className="sr-only" aria-live="polite">

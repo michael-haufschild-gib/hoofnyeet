@@ -1680,17 +1680,42 @@
       "generatedAt": "2026-09-08",
       "normalization": "EBU R128 -17 LUFS target, followed by measured MP3 peak headroom adjustment",
       "normalizationGainDB": -3.1
+    },
+    {
+      "id": "nuclear",
+      "kind": "sfx",
+      "prompt": "Exaggerated cartoon atomic explosion for a silly pony physics game: immediate huge punchy low boom and crunchy blast, a rising roaring mushroom-cloud whoosh with debris rattles, then at 3.5 seconds an absurdly tiny rubber duck squeak and one falling metal ping. Dramatic but playful, polished game sound, no voices, no speech, no music, no silence at the start. Complete compact arc with a clean fading tail.",
+      "model": "not exposed by MCP",
+      "generator": "mcp__elevenlabs__text_to_sound_effects",
+      "durationRequested": 4.8,
+      "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/audio/originals/nuclear/sfx_Exagg_20260908_230537.mp3",
+      "path": "/Users/Spare/Documents/code/hoof-and-yeet-assets/audio/production/nuclear.mp3",
+      "filename": "nuclear.mp3",
+      "generationSuccess": true,
+      "receipt": "Success. File saved as: /Users/Spare/Documents/code/hoof-and-yeet-assets/audio/originals/nuclear/sfx_Exagg_20260908_230537.mp3",
+      "duration": 4.8,
+      "bytes": 58349,
+      "codec": "mp3",
+      "sampleRate": 44100,
+      "channels": 1,
+      "normalizationTargetLUFS": -17,
+      "normalizationGainDB": -6.61,
+      "peakDBFS": -3.6,
+      "meanDBFS": -16.6,
+      "verified": true,
+      "generatedAt": "2026-09-08",
+      "normalization": "Measured static gain -6.61 dB with 4ms onset and 40ms tail fades; mono 96kbps MP3, decoded peak verified."
     }
   ],
-  "totalBytes": 4712937,
+  "totalBytes": 4771286,
   "normalization": "EBU R128 measured static gain: music targets -20 LUFS, stings and SFX -17 LUFS, constrained by -3.5 dBTP headroom before MP3 encoding. Short transient effects may remain below the LUFS target. 4 ms onset and 8 ms tail fades prevent clicks. MP3 encoder padding is reflected in duration.",
   "verification": {
     "allDecoded": true,
     "allDurationsWithin100ms": true,
     "noFullScalePeaks": true,
     "allNonSilent": true,
-    "count": 65,
-    "totalBytes": 4713251
+    "count": 66,
+    "totalBytes": 4771286
   },
   "modelNote": "Music explicitly uses music_v2. The sound effect MCP tool does not expose its model ID; the manifest records this instead of guessing."
 }

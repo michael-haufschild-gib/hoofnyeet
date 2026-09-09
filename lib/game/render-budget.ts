@@ -37,14 +37,21 @@ export class RenderBudget {
     this.seconds += dt;
     this.frames++;
     if (dt > 1 / 50) this.lateFrames++;
-    if (this.seconds < 1.2 || this.frames < 20) return false;
-    const overloaded =
-      this.seconds / this.frames > 1 / 55 &&
-      this.lateFrames / this.frames > 0.12;
+    const average = this.seconds / this.frames;
+    const lateRatio = this.lateFrames / this.frames;
+    // Respond sooner to a genuinely sustained half-rate scene. Eighteen
+    // samples prevent a texture upload or one long task from lowering quality.
+    const severe =
+      this.seconds >= 0.6 &&
+      this.frames >= 18 &&
+      average > 1 / 42 &&
+      lateRatio > 0.65;
+    if (!severe && (this.seconds < 1.2 || this.frames < 20)) return false;
+    const overloaded = average > 1 / 55 && lateRatio > 0.12;
     this.seconds = this.frames = this.lateFrames = 0;
     if (!overloaded) return false;
     this.level++;
-    this.cooldown = 0.4;
+    this.cooldown = severe ? 0.2 : 0.4;
     return true;
   }
 }

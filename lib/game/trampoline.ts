@@ -1,5 +1,5 @@
 import type { Graphics } from 'pixi.js';
-import { TRACK, trampolineDip, type GameState } from './simulation';
+import { TRACK, trampolineDip, jumpTarget, type GameState } from './simulation';
 
 const HALF_BED = 88;
 const BED_DEPTH = 13;
@@ -28,9 +28,79 @@ export function trampolineBed(s: Pick<GameState, 'phase' | 'phaseTime' | 'x'>) {
 }
 
 /** Padded rim, fixed feet and actual coiled springs share the simulation's bed. */
-export function drawTrampoline(g: Graphics, s: GameState) {
+export function drawTrampoline(g: Graphics, s: GameState, reduced = false) {
   const bed = trampolineBed(s);
   const center = TRACK.trampoline;
+  const cue = jumpTarget(s),
+    time = s.sceneTime ?? s.time;
+  const active = ['countdown', 'runup', 'approach', 'compression'].includes(
+    s.phase,
+  );
+  const green = s.phase === 'runup' && cue.ready;
+  const accent = green ? 0x78efae : 0xffd54f;
+  if (active) {
+    // The actual take-off window moves with approach speed. Its ground paint
+    // and arrow use the same bounds as the input cue, not a guessed distance.
+    g.roundRect(cue.start, 4, cue.end - cue.start, 22, 8)
+      .fill({ color: accent, alpha: 0.9 })
+      .stroke({ color: 0x2d5546, width: 3 });
+    for (let i = 0; i < 4; i++) {
+      const x = cue.start - 34 - i * 40;
+      g.poly([x - 9, 6, x, 15, x - 9, 24, x - 2, 24, x + 7, 15, x - 2, 6]).fill(
+        { color: 0xfff4c5, alpha: 0.85 - i * 0.14 },
+      );
+    }
+    if (s.phase === 'runup') {
+      const y = -187 + (reduced ? 0 : Math.sin(time * 5) * 5);
+      const x = cue.center;
+      g.poly([
+        x - 10,
+        y,
+        x + 10,
+        y,
+        x + 10,
+        y + 24,
+        x + 24,
+        y + 24,
+        x,
+        y + 49,
+        x - 24,
+        y + 24,
+        x - 10,
+        y + 24,
+      ])
+        .fill(accent)
+        .stroke({ color: 0x254b3d, width: 4, join: 'round' });
+      if (green)
+        g.ellipse(x, 14, 67, 17).stroke({
+          color: 0xedffcd,
+          width: 3,
+          alpha: 0.85,
+        });
+    }
+  }
+  // A distinct sporting station: tall striped posts, pennants and a lit rim.
+  for (const side of [-1, 1]) {
+    const x = center + side * 113;
+    g.roundRect(x - 4, -125, 8, 123, 3).fill(0x294c3f);
+    g.roundRect(x - 2, -122, 4, 116, 2).fill(0xffe7a0);
+    for (let stripe = 0; stripe < 5; stripe++)
+      g.rect(x - 3, -111 + stripe * 20, 6, 9).fill(0xd46b43);
+    const flutter = reduced ? 0 : Math.sin(time * 4 + side) * 5;
+    g.poly([
+      x,
+      -127,
+      x + side * 40,
+      -118 + flutter,
+      x + side * 33,
+      -96 + flutter,
+      x,
+      -106,
+    ])
+      .fill(accent)
+      .stroke({ color: 0x294c3f, width: 2 });
+    g.circle(x, -128, 6).fill(0xffe589).stroke({ color: 0x294c3f, width: 2 });
+  }
   g.ellipse(center, 2, 113, 7).fill({ color: 0x213e35, alpha: 0.2 });
   for (const side of [-1, 1]) {
     g.moveTo(center + side * 84, TRACK.surface + 8)
@@ -80,6 +150,8 @@ export function drawTrampoline(g: Graphics, s: GameState) {
         y,
       );
   };
+  path(0);
+  g.stroke({ color: accent, width: BED_DEPTH + 9, cap: 'round' });
   path(0);
   g.stroke({ color: 0x244337, width: BED_DEPTH, cap: 'round' });
   path(0);

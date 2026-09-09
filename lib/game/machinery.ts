@@ -15,6 +15,29 @@ export const drivenMechanisms: Mechanism[] = [
   'carousel',
   'pendulum',
 ];
+export const MACHINE_ENTRANCE = 0.55;
+
+/** The warning gives machinery time to enter before its existing action beat.
+ * This is an actual kinematic path; contact remains disabled until arrival. */
+export function mechanismEntrance(
+  kind: Mechanism,
+  age: number,
+  anchorX: number,
+  shape: Shape,
+) {
+  const pose = mechanismPose(kind, Math.max(0, age), anchorX, shape);
+  if (age >= 0) return pose;
+  const remaining = Math.min(1, -age / MACHINE_ENTRANCE);
+  const offset = remaining * remaining * (3 - 2 * remaining);
+  const side = ['chomp', 'glove', 'roller', 'carousel', 'pendulum'].includes(
+    kind,
+  );
+  return {
+    ...pose,
+    x: pose.x + (side ? 900 * offset : 0),
+    y: pose.y - (side ? 0 : 780 * offset),
+  };
+}
 
 /** Spawn and animation sample the same trajectory; no first-tick teleport. */
 export function mechanismPose(

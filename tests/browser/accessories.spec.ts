@@ -219,3 +219,232 @@ test('accessories follow moving and severed heads and recorded outfits render id
       contentType: 'image/png',
     });
 });
+
+test('hat rims sit on each illustrated skull and the visor leaves the eyes and muzzle clear', async ({
+  page,
+}, info) => {
+  await page.goto('/');
+  await page.waitForFunction(() => window.__hoof?.ready);
+  const report = await page.evaluate(async () => {
+    const path = '/lib/game/headwear.ts';
+    const { Headwear } = await import(path);
+    const c = window.__hoof;
+    c.setExporting(true);
+    const r = c.renderer;
+    const scene = r as unknown as {
+      textures: Record<string, import('pixi.js').Texture>;
+      pony: Container;
+      ponyParts: Record<string, Sprite>;
+    };
+    const SpriteClass = scene.ponyParts.head
+      .constructor as typeof import('pixi.js').Sprite;
+    const ContainerClass = scene.pony
+      .constructor as typeof import('pixi.js').Container;
+    const mask = document.createElement('canvas');
+    const image = new Image();
+    image.src = '/art/sprites/astronaut-helmet.webp';
+    await image.decode();
+    mask.width = image.naturalWidth;
+    mask.height = image.naturalHeight;
+    const context = mask.getContext('2d')!;
+    context.drawImage(image, 0, 0);
+    const rows = [],
+      captures = [];
+    for (const part of ['head', 'surprisedHead', 'offended-head'] as const) {
+      for (const hat of ['party', 'crown', 'space'] as const) {
+        const target = new ContainerClass();
+        const head = new SpriteClass({
+          texture: scene.textures[part],
+          anchor: 0.5,
+        });
+        head.width = 71;
+        head.height = (71 * head.texture.height) / head.texture.width;
+        const wear = new Headwear(scene.textures);
+        wear.fit(hat, head, part);
+        target.addChild(head, wear.view);
+        const p = wear.view.children.find(
+          (p: Sprite) => p.label === hat,
+        ) as Sprite;
+        const brim = hat === 'party' ? [0.43, 0.81] : [0.46, 0.845];
+        const contact = head.toLocal(
+          p.toGlobal({
+            x: (brim[0] - p.anchor.x) * p.texture.width,
+            y: (brim[1] - p.anchor.y) * p.texture.height,
+          }),
+        );
+        // Independent facial landmarks in the original head artwork. They must
+        // fall in transparent glass, not behind the opaque helmet frame.
+        const landmarks =
+          part === 'offended-head'
+            ? [
+                [0.63, 0.57],
+                [0.8, 0.52],
+                [0.81, 0.74],
+              ]
+            : part === 'surprisedHead'
+              ? [
+                  [0.64, 0.44],
+                  [0.83, 0.43],
+                  [0.86, 0.58],
+                ]
+              : [
+                  [0.61, 0.44],
+                  [0.81, 0.4],
+                  [0.86, 0.56],
+                ];
+        const occlusion =
+          hat !== 'space'
+            ? []
+            : landmarks.map(([u, v]) => {
+                const point = p.toLocal(
+                  head.toGlobal({
+                    x: (u - 0.5) * head.texture.width,
+                    y: (v - 0.5) * head.texture.height,
+                  }),
+                );
+                const x = Math.round(point.x + p.anchor.x * image.naturalWidth);
+                const y = Math.round(
+                  point.y + p.anchor.y * image.naturalHeight,
+                );
+                return context.getImageData(x, y, 1, 1).data[3];
+              });
+        rows.push({
+          part,
+          hat,
+          seat: {
+            u: contact.x / head.texture.width + 0.5,
+            v: contact.y / head.texture.height + 0.5,
+          },
+          aspectError: Math.abs(
+            p.width / p.height - p.texture.width / p.texture.height,
+          ),
+          occlusion,
+        });
+        const canvas = r.app.renderer.extract.canvas({ target, resolution: 3 });
+        captures.push({
+          name: `${part}-${hat}`,
+          url: canvas.toDataURL?.() ?? '',
+        });
+        target.destroy({ children: true });
+      }
+    }
+    return { rows, captures };
+  });
+  for (const row of report.rows) {
+    expect(row.aspectError, JSON.stringify(row)).toBeLessThan(0.001);
+    if (row.hat !== 'space') {
+      expect(row.seat.u, JSON.stringify(row)).toBeGreaterThan(0.5);
+      expect(row.seat.u, JSON.stringify(row)).toBeLessThan(0.75);
+      expect(row.seat.v, JSON.stringify(row)).toBeGreaterThan(0.1);
+      expect(row.seat.v, JSON.stringify(row)).toBeLessThan(0.26);
+    }
+    for (const alpha of row.occlusion)
+      expect(alpha, JSON.stringify(row)).toBeLessThan(80);
+  }
+  for (const capture of report.captures)
+    await info.attach(capture.name, {
+      body: Buffer.from(capture.url.split(',')[1], 'base64'),
+      contentType: 'image/png',
+    });
+});
+
+test('wing roots and magnetic shoes remain attached throughout gallops, flaps and rolls, inside the camera', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.waitForFunction(() => window.__hoof?.ready);
+  const rows = await page.evaluate(async () => {
+    const simPath = '/lib/game/simulation.ts';
+    const { createGame } = await import(simPath);
+    const c = window.__hoof;
+    c.setExporting(true);
+    const r = c.renderer;
+    const scene = r as unknown as {
+      pony: Container;
+      ponyParts: Record<string, Sprite>;
+      gear: Record<string, Sprite>;
+    };
+    const rows = [];
+    for (const equipment of [
+      ['wings', 'magnet'],
+      ['wings', 'feather', 'magnet'],
+    ]) {
+      for (const phase of [
+        'title',
+        'runup',
+        'compression',
+        'flight',
+      ] as const) {
+        for (let i = 0; i < 12; i++) {
+          const s = createGame();
+          Object.assign(s, {
+            phase,
+            phaseTime: 0.16,
+            x: 2000 + i * 11,
+            y: phase === 'flight' ? -350 : 0,
+            flapPose: phase === 'flight' ? 0.45 * (1 - i / 12) : 0,
+            rotation: phase === 'flight' ? (i * Math.PI) / 6 : 0,
+            equipment,
+            outfit: { hat: 'space', ponyId: 'buttercup' },
+          });
+          r.reset();
+          r.draw(s, 0, 4);
+          const near = scene.gear['wing-left'],
+            far = scene.gear['wing-right'];
+          const root = (p: Sprite, u: number) =>
+            scene.pony.toLocal(
+              p.toGlobal({
+                x: (u - p.anchor.x) * p.texture.width,
+                y: (0.76 - p.anchor.y) * p.texture.height,
+              }),
+            );
+          const sole = scene.ponyParts.frontLeg2;
+          const shoe = scene.gear['magnetic-horseshoe'];
+          const shoeFoot = shoe.toGlobal({ x: 0, y: 0 });
+          const hoofFoot = sole.toGlobal({
+            x: 0,
+            y: sole.texture.height * (0.985 - sole.anchor.y),
+          });
+          const bounds = scene.pony.getBounds();
+          rows.push({
+            phase,
+            i,
+            equipment,
+            near: root(near, 0.83),
+            far: root(far, 0.17),
+            shoeGap:
+              Math.hypot(shoeFoot.x - hoofFoot.x, shoeFoot.y - hoofFoot.y) /
+              r.zoom,
+            aspectError: Math.abs(
+              near.width / near.height -
+                near.texture.width / near.texture.height,
+            ),
+            layered:
+              scene.pony.getChildIndex(far) <
+                scene.pony.getChildIndex(scene.ponyParts.torso) &&
+              scene.pony.getChildIndex(near) <
+                scene.pony.getChildIndex(scene.ponyParts.head),
+            top: bounds.y,
+            safe: r.framing!.safeTop,
+            left: bounds.x,
+            right: bounds.x + bounds.width,
+            width: r.w,
+          });
+        }
+      }
+    }
+    return rows;
+  });
+  for (const row of rows) {
+    expect(row.near.x, JSON.stringify(row)).toBeCloseTo(6, 4);
+    expect(row.near.y, JSON.stringify(row)).toBeCloseTo(-17, 4);
+    expect(row.far.x, JSON.stringify(row)).toBeCloseTo(15, 4);
+    expect(row.far.y, JSON.stringify(row)).toBeCloseTo(-23, 4);
+    expect(row.shoeGap, JSON.stringify(row)).toBeLessThan(0.01);
+    expect(row.aspectError, JSON.stringify(row)).toBeLessThan(0.001);
+    expect(row.layered, JSON.stringify(row)).toBe(true);
+    expect(row.top, JSON.stringify(row)).toBeGreaterThanOrEqual(row.safe - 1);
+    expect(row.left, JSON.stringify(row)).toBeGreaterThanOrEqual(0);
+    expect(row.right, JSON.stringify(row)).toBeLessThanOrEqual(row.width);
+  }
+});

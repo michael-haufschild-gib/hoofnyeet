@@ -167,3 +167,50 @@ void test('a distant portal cannot reset an escaped player to the original crash
     }
   }
 });
+
+void test('magnetic debris cannot become a perpetual lift engine after the finale', async () => {
+  await initPhysics();
+  const { land } = await import('../lib/game/simulation');
+  for (const offset of [0, 0.03, 0.08]) {
+    const s = createGame();
+    const equipment = ['confetti', 'aftershock', 'magnet', 'rubber'];
+    Object.assign(s, {
+      reactive: true,
+      phase: 'flight',
+      world: 'farm',
+      disaster: 2,
+      launched: true,
+      x: 3120,
+      vx: 720,
+      vy: 650,
+      seed: 31,
+      ability: 'dynamite',
+      equipment,
+      mod: modifiers(equipment, 'farm'),
+    });
+    land(s);
+    s.landing = 'accordion';
+    const c = new CrashWorld(s);
+    try {
+      let done = false;
+      for (let tick = 0; tick < 5400; tick++) {
+        if (tick === Math.round((1.3 + offset) * 120)) c.action('secondary');
+        if (
+          [2.6, 5.6, 9.2].some((at) => tick === Math.round((at + offset) * 120))
+        )
+          c.action('primary');
+        c.step(STEP);
+        c.drain();
+        const f = c.snapshot();
+        assert.ok(f.focusY > -4000, `unbounded magnetic ascent at ${f.time}`);
+        if (f.settled) {
+          done = true;
+          break;
+        }
+      }
+      assert.ok(done, `dense magnet scenario never settled, offset ${offset}`);
+    } finally {
+      c.dispose();
+    }
+  }
+});

@@ -8,12 +8,15 @@ function sample(budget: RenderBudget, fps: number, seconds: number) {
 
 void test('sustained missed frames reduce decoration before resolution and retain legible pixels', () => {
   const budget = new RenderBudget(2);
-  sample(budget, 30, 1.7);
-  assert.equal(budget.resolution, 2);
-  assert.equal(budget.density, 0.55);
-  sample(budget, 30, 1.7);
-  assert.equal(budget.resolution, 1.5);
-  sample(budget, 30, 1.7);
+  const choices = [];
+  for (let frame = 0; frame < 100; frame++)
+    if (budget.sample(1 / 30, true))
+      choices.push([budget.resolution, budget.density]);
+  assert.deepEqual(choices, [
+    [2, 0.55],
+    [1.5, 0.55],
+    [1, 0.35],
+  ]);
   assert.equal(budget.resolution, 1);
   assert.equal(budget.density, 0.35);
   sample(budget, 15, 30);
@@ -45,7 +48,7 @@ void test('healthy frames, occasional stalls, pause and export cannot lower qual
 
 void test('resize and interruption discard partial slow-frame samples without resetting chosen quality', () => {
   const budget = new RenderBudget(1.5);
-  sample(budget, 30, 1.3);
+  sample(budget, 30, 0.75);
   budget.resetSampling();
   sample(budget, 60, 5);
   assert.equal(budget.density, 1);
@@ -55,4 +58,30 @@ void test('resize and interruption discard partial slow-frame samples without re
   budget.sample(Number.NaN, true);
   sample(budget, 60, 10);
   assert.equal(budget.resolution, 1);
+});
+
+void test('consistent severe overload reacts early while minor misses need the full sampling window', () => {
+  const severe = new RenderBudget(2);
+  sample(severe, 30, 1.15);
+  assert.equal(
+    severe.density,
+    0.55,
+    'drop optional decoration after sustained half-rate frames',
+  );
+  assert.equal(
+    severe.resolution,
+    2,
+    'keep full resolution for the first response',
+  );
+  sample(severe, 30, 1.7);
+  assert.equal(
+    severe.resolution,
+    1,
+    'do not leave several seconds of severe input latency',
+  );
+  const mild = new RenderBudget(2);
+  sample(mild, 45, 1.15);
+  assert.equal(mild.density, 1);
+  sample(mild, 45, 0.6);
+  assert.equal(mild.density, 0.55);
 });

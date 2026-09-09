@@ -19,7 +19,7 @@ import {
   type ChallengeRule,
 } from './challenge-rules';
 import { HorseAudio } from './audio';
-import { replayFrame } from './replay';
+import { replayFrame, replayEvent, replayLeadIn } from './replay';
 import {
   defaultSave,
   finishRound,
@@ -29,7 +29,13 @@ import {
 } from './storage';
 import { CrashWorld, initPhysics } from './crash';
 import { saveIncident } from './sharing';
-import { modifiers, worldById, type Ability, type WorldId } from './content';
+import {
+  modifiers,
+  worldById,
+  relicArt,
+  type Ability,
+  type WorldId,
+} from './content';
 import { recordPerkEvent } from './effects/perk-motion';
 import {
   newRun,
@@ -56,6 +62,8 @@ export interface ViewState {
   ready: boolean;
   error: string;
   graphicsLost: boolean;
+  preparation: { world: WorldId; progress: number; failed: boolean } | null;
+  tutorial: boolean;
   newBest: boolean;
   newHats: Hat[];
   fps: number;
@@ -77,6 +85,8 @@ export class GameController {
   ready = false;
   error = '';
   graphicsLost = false;
+  preparation: ViewState['preparation'] = null;
+  tutorial = false;
   newBest = false;
   newHats: Hat[] = [];
   fps = 60;
@@ -97,12 +107,16 @@ export class GameController {
   private caption: Element | null;
   private hud: Element | null = null;
   private resizePending = false;
+  private pausedPictureReady = false;
   private crash: CrashWorld | null = null;
   private previousSimTime = 0;
   private replayTime = 0;
   private replayEvent = 0;
   private replaySession = 0;
   private lastAssist = 0;
+  private preparationId = 0;
+  private preparationInterrupted = false;
+  private abilityIcons = new Map<string, HTMLImageElement>();
   constructor(
     canvas: HTMLCanvasElement,
     private onView: (v: ViewState) => void,
@@ -152,6 +166,7 @@ export class GameController {
     this.raf = requestAnimationFrame(this.frame);
   }
   private syncPreferences() {
+    this.pausedPictureReady = false;
     this.audio.music = this.save.music;
     this.audio.effects = this.save.effects;
     this.renderer.reduced = this.save.reduced;
@@ -189,7 +204,8 @@ export class GameController {
     this.persist();
     this.syncPreferences();
     this.publish();
-    if (key === 'music' || key === 'effects') void this.audio.unlock();
+    if ((key === 'music' || key === 'effects') && !this.state.paused)
+      void this.audio.unlock();
   }
   private persist() {
     // Preferences and a quick round must not erase a tour waiting to be resumed.
@@ -201,6 +217,8 @@ export class GameController {
   }
   startRun(mode: RunMode) {
     if (!this.ready || this.graphicsLost) return;
+    this.error = '';
+    this.preparation = null;
     this.run = newRun(
       mode,
       undefined,
@@ -231,6 +249,11 @@ export class GameController {
       await this.launch();
   }
   home() {
+    this.tutorial = false;
+    this.preparationId++;
+    this.preparation = null;
+    this.error = '';
+    this.ready = this.renderer.ready;
     this.state = createGame(this.state.round);
     this.clearInputs();
     this.clock.reset();
@@ -246,17 +269,87 @@ export class GameController {
     this.startRun('quick');
     void this.launch(world);
   }
+  private async prepareAbilityIcon(ability: string) {
+    const src = relicArt(ability);
+    if (this.abilityIcons.has(src)) return;
+    // Pixi's ImageBitmap cache is separate from HTML <img> decoding. Keep the
+    // actual HUD image resident before React mounts the in-game ability hint.
+    const image = new Image();
+    image.src = src;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        image.decode(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () =>
+              reject(new Error('Ability illustration timed out. Try again.')),
+            20000,
+          );
+        }),
+      ]);
+      if (!this.disposed) this.abilityIcons.set(src, image);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   async launch(world?: WorldId) {
     if (!this.ready || !this.run || this.graphicsLost) return;
-    const selected = world ?? this.run.world;
+    const selected = world ?? this.run.world,
+      run = this.run;
     if (!['briefing', 'playing'].includes(this.run.status)) return;
     this.ready = false;
     this.error = '';
+    const preparationId = ++this.preparationId;
+    this.preparationInterrupted = false;
+    this.preparation = { world: selected, progress: 0, failed: false };
+    this.clearInputs();
+    // Invoke inside the original click/tap, before awaiting any network work.
+    // Context creation is synchronous; suspended contexts can still decode.
+    void this.audio.unlock();
     this.publish();
     try {
-      await this.renderer.loadWorld(selected);
-      if (this.disposed || this.graphicsLost) return;
-      if (!beginAttempt(this.run, selected)) return;
+      const completion = [0, 0, 0];
+      const progress = (part: number, value: number) => {
+        if (
+          this.disposed ||
+          preparationId !== this.preparationId ||
+          !this.preparation
+        )
+          return;
+        completion[part] = value;
+        this.preparation.progress =
+          completion[0] * 0.48 + completion[1] * 0.48 + completion[2] * 0.04;
+        this.publish();
+      };
+      await Promise.all([
+        this.renderer.prepareLevel(
+          selected,
+          this.save.pony,
+          (p) => progress(0, p),
+          run.ability as Ability,
+        ),
+        this.audio.prepareLevel(
+          selected,
+          objective({ ...run, world: selected }).boss,
+          (p) => progress(1, p),
+        ),
+        this.prepareAbilityIcon(run.ability).then(() => progress(2, 1)),
+      ]);
+      if (
+        this.disposed ||
+        preparationId !== this.preparationId ||
+        this.run !== run
+      )
+        return;
+      if (this.graphicsLost)
+        throw new Error(
+          'Course preparation was interrupted. Try again when the picture recovers.',
+        );
+      if (!beginAttempt(run, selected)) {
+        this.preparation = null;
+        return;
+      }
       this.attemptAppearance = {
         hat: this.save.hat,
         ponyId: this.save.pony,
@@ -265,6 +358,9 @@ export class GameController {
       };
       Object.assign(this.renderer, this.attemptAppearance);
       startGame(this.state);
+      this.tutorial = !this.save.controlsSeen && this.save.rounds === 0;
+      this.state.paused =
+        this.tutorial || this.preparationInterrupted || document.hidden;
       if (this.run.attempt > 1 || this.save.rounds > 0)
         this.state.phaseTime = 1.45;
       const equipment = items(this.run),
@@ -285,6 +381,7 @@ export class GameController {
         flaps: mod.maxFlaps,
       });
       this.screen = 'game';
+      this.preparation = null;
       this.clock.reset();
       this.frames = [];
       this.recordedEvents = [];
@@ -296,16 +393,21 @@ export class GameController {
       this.crash = null;
       this.renderer.reset();
       this.audio.reset();
+      this.pausedPictureReady = false;
       this.held.clear();
       this.newBest = false;
       this.newHats = [];
       this.persist();
-      void this.audio.unlock();
+      if (this.state.paused) this.audio.pause();
     } catch (e) {
+      if (this.disposed || preparationId !== this.preparationId) return;
       this.error = (e as Error).message;
+      if (this.preparation) this.preparation.failed = true;
     } finally {
-      this.ready = true;
-      this.publish();
+      if (!this.disposed && preparationId === this.preparationId) {
+        this.ready = true;
+        this.publish();
+      }
     }
   }
   pitstop() {
@@ -386,12 +488,21 @@ export class GameController {
   }
   pause(paused?: boolean) {
     if (this.screen !== 'game') return;
-    this.state.paused = this.graphicsLost || (paused ?? !this.state.paused);
+    this.state.paused =
+      this.tutorial || this.graphicsLost || (paused ?? !this.state.paused);
     this.clearInputs();
     this.clock.reset();
+    this.pausedPictureReady = false;
     if (this.state.paused) this.audio.pause();
     else void this.audio.unlock();
     this.publish();
+  }
+  dismissTutorial() {
+    if (!this.tutorial) return;
+    this.tutorial = false;
+    this.save.controlsSeen = true;
+    this.persist();
+    this.pause(document.hidden || this.graphicsLost);
   }
   replayIncident() {
     if (this.screen !== 'results' || !this.frames.length) return;
@@ -402,6 +513,12 @@ export class GameController {
     this.replaySession++;
     this.state.paused = false;
     this.renderer.reset();
+    for (const event of replayLeadIn(
+      this.recordedEvents,
+      this.frames,
+      this.frames[0].time,
+    ))
+      this.renderer.event(event);
     this.audio.reset();
     void this.audio.unlock();
     this.publish();
@@ -427,11 +544,12 @@ export class GameController {
             reduced: this.renderer.reduced,
           },
       frames,
-      events: structuredClone(
-        this.recordedEvents.filter(
+      events: structuredClone([
+        ...replayLeadIn(this.recordedEvents, frames, frames[0]?.time ?? 0),
+        ...this.recordedEvents.filter(
           (e) => e.time !== undefined && e.time >= (frames[0]?.time ?? 0),
         ),
-      ),
+      ]),
       duration: frames.length ? frames.at(-1)!.time - frames[0].time : 0,
     };
   }
@@ -462,6 +580,7 @@ export class GameController {
     this.held.delete(e.code);
   };
   private blur = () => {
+    if (this.preparation) this.preparationInterrupted = true;
     this.clearInputs();
     if (this.screen === 'game') this.pause(true);
     else this.audio.pause();
@@ -477,19 +596,21 @@ export class GameController {
     this.publish();
   };
   private graphicsRestored = () => {
-    // Pixi restores its GL systems in another listener on this same event.
-    queueMicrotask(() => {
+    // A microtask can run between native event listeners. Wait until the
+    // complete restored-event dispatch finishes before touching Pixi's caches.
+    setTimeout(() => {
       if (this.disposed) return;
       try {
         this.renderer.restoreGraphics();
         this.graphicsLost = false;
+        this.pausedPictureReady = false;
         this.last = 0;
       } catch {
         this.error =
           'The picture could not recover. Reload to return to your saved event.';
       }
       this.publish();
-    });
+    }, 0);
   };
   private drainEvents() {
     const events = [...this.state.events, ...(this.crash?.drain() ?? [])];
@@ -595,6 +716,7 @@ export class GameController {
     if (this.disposed) return;
     if (this.resizePending) {
       this.resizePending = false;
+      this.pausedPictureReady = false;
       const canvasTop = this.renderer.canvas.getBoundingClientRect().top;
       this.renderer.hudInset = Math.max(
         80,
@@ -619,6 +741,13 @@ export class GameController {
         (this.screen === 'game' || this.state.phase === 'replay'),
     );
     if (this.exporting || this.graphicsLost) {
+      this.raf = requestAnimationFrame(this.frame);
+      return;
+    }
+    // Keep the RAF timestamp current for a smooth resume, but leave an
+    // unchanged paused picture on the compositor instead of repainting it.
+    // Layout, preferences, preparation and graphics recovery invalidate it.
+    if (this.state.paused && this.pausedPictureReady) {
       this.raf = requestAnimationFrame(this.frame);
       return;
     }
@@ -683,13 +812,14 @@ export class GameController {
             ...e,
             id: `replay-${this.replaySession}-${this.replayEvent}`,
           });
-          this.renderer.event(e);
+          this.renderer.event(replayEvent(e, this.frames));
         }
         this.replayEvent++;
       }
       if (at >= this.frames.at(-1)!.time) this.skipReplay();
     }
     this.renderer.draw(render, this.state.paused ? 0 : dt, render.time);
+    this.pausedPictureReady = this.state.paused;
     this.audio.tick(render);
     if (now - this.lastPublish > 70 || previous !== this.state.phase) {
       this.publish();
@@ -706,6 +836,8 @@ export class GameController {
       ready: this.ready && !this.graphicsLost,
       error: this.error,
       graphicsLost: this.graphicsLost,
+      preparation: this.preparation ? { ...this.preparation } : null,
+      tutorial: this.tutorial,
       newBest: this.newBest,
       newHats: this.newHats,
       fps: Math.round(this.fps),
@@ -736,7 +868,9 @@ export class GameController {
     };
   }
   dispose() {
+    this.preparationId++;
     this.disposed = true;
+    this.abilityIcons.clear();
     cancelAnimationFrame(this.raf);
     this.observer.disconnect();
     window.removeEventListener('keydown', this.keyDown);

@@ -1,4 +1,4 @@
-import type { GameState } from './simulation';
+import type { GameEvent, GameState } from './simulation';
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const turn = (a: number, b: number, t: number) =>
@@ -43,8 +43,23 @@ export function replayFrame(
     result.wreck = {
       ...a.wreck,
       time: mix(a.wreck.time, b.wreck.time, t),
+      abilityAge:
+        !a.wreck.abilityReady &&
+        !b.wreck.abilityReady &&
+        a.wreck.abilityAge !== undefined &&
+        b.wreck.abilityAge !== undefined
+          ? mix(a.wreck.abilityAge, b.wreck.abilityAge, t)
+          : a.wreck.abilityAge,
       focusX: mix(a.wreck.focusX, b.wreck.focusX, t),
       focusY: mix(a.wreck.focusY, b.wreck.focusY, t),
+      velocityX:
+        a.wreck.velocityX !== undefined && b.wreck.velocityX !== undefined
+          ? mix(a.wreck.velocityX, b.wreck.velocityX, t)
+          : a.wreck.velocityX,
+      velocityY:
+        a.wreck.velocityY !== undefined && b.wreck.velocityY !== undefined
+          ? mix(a.wreck.velocityY, b.wreck.velocityY, t)
+          : a.wreck.velocityY,
       bodies: a.wreck.bodies.map((body) => {
         const to = next.get(body.id);
         if (
@@ -63,4 +78,34 @@ export function replayFrame(
     };
   }
   return result;
+}
+
+/** Older incidents recorded wall time only. Map their visual beats onto the
+ * saved simulation clock, including hit freezes, without rewriting the recording. */
+export function replayEvent(
+  event: GameEvent,
+  frames: readonly GameState[],
+): GameEvent {
+  if (event.sceneTime !== undefined || !frames.length) return event;
+  const frame = replayFrame(frames, event.time ?? frames[0].time);
+  return { ...event, sceneTime: frame.sceneTime ?? frame.time };
+}
+
+/** Seed only still-living visual effects at a cut. Sound begins at the cut;
+ * an existing puff/pressure wave keeps its original age rather than restarting. */
+export function replayLeadIn(
+  events: readonly GameEvent[],
+  frames: readonly GameState[],
+  first: number,
+): GameEvent[] {
+  if (!frames.length) return [];
+  const frame = replayFrame(frames, first);
+  const sceneTime = frame.sceneTime ?? frame.time;
+  return events
+    .filter((event) => event.time !== undefined && event.time < first)
+    .map((event) => replayEvent(event, frames))
+    .filter(
+      (event) =>
+        event.sceneTime! >= sceneTime - 2 && event.sceneTime! <= sceneTime,
+    );
 }

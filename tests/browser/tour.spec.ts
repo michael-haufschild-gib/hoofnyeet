@@ -95,12 +95,24 @@ test('complete nine-event tour with real inputs, contracts, upgrades and stable 
             1 + node.children.reduce((n, child) => n + count(child), 0);
           return {
             sceneObjects: count(c.renderer.app.stage),
+            effectPools: [
+              'carnage-sprite-pool',
+              'illustrated-impact-spray',
+              'contact-liquid-splats',
+            ].map(
+              (label) =>
+                c.renderer.app.stage.getChildByLabel(label, true)?.children
+                  .length,
+            ),
             bodies: c.state.wreck?.bodies.length ?? 0,
             replayFrames: c.recording().frames.length,
           };
         });
         expect(resources.bodies).toBeLessThanOrEqual(80);
-        expect(resources.sceneObjects).toBeLessThan(700);
+        // The independent 256-drop/64-splat pools are allocated once; their
+        // fixed capacity must not be mistaken for growth between events.
+        expect(resources.effectPools).toEqual([192, 257, 64]);
+        expect(resources.sceneObjects).toBeLessThan(1024);
         expect(resources.replayFrames).toBeLessThanOrEqual(2400);
         let heapMB: number | null = null;
         if (memory) {

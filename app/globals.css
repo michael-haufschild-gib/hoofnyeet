@@ -3342,7 +3342,13 @@ footer button b {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scroll-padding-block: 14px;
   padding: 10px 28px 26px;
+}
+.dialog-body button {
+  /* Native focus scrolling must leave the lifted card and its outline inside
+     the scrollport, including Safari's start-aligned focus restoration. */
+  scroll-margin-block: 14px;
 }
 .horse-dialog > [data-slot='dialog-close'] {
   top: 15px;
@@ -3456,7 +3462,7 @@ footer button b {
     padding: 22px 36px 16px 20px;
   }
   .dialog-body {
-    padding: 0 20px 22px;
+    padding: 10px 20px 22px;
   }
   .settings-tabs button {
     font-size: 10px;
@@ -3631,4 +3637,44 @@ footer button b {
   .unstable .judge-row {
     display: none;
   }
+}
+
+.course-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  display: grid;
+  place-items: center;
+  background: #f5f1dbbb;
+  backdrop-filter: blur(5px);
+}
+.course-loading-card {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(280px, 80%);
+  padding: 24px;
+  color: #294e40;
+  border: 2px solid #416b54;
+  border-radius: 22px;
+  background: #fff8e7;
+  box-shadow: 0 5px 0 #416b54;
+}
+.course-loading-card b {
+  font:
+    26px 'Lilita One',
+    sans-serif;
+}
+.loading-hoof {
+  font-size: 30px;
+  color: #cf6445;
+}
+.course-loading-card progress {
+  width: 100%;
+  height: 13px;
+  accent-color: #e2aa3d;
+}
+.course-loading-card > span:last-of-type {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }

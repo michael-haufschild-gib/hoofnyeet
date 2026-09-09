@@ -1,8 +1,22 @@
 import { test as base, expect } from '@playwright/test';
 
 /** Test audio may feed a recording track, but never the computer's speakers. */
-export const test = base.extend({
-  context: async ({ context }, runFixture) => {
+export const test = base.extend<{ firstRun: boolean }>({
+  firstRun: [false, { option: true }],
+  context: async ({ context, firstRun }, runFixture) => {
+    if (!firstRun)
+      await context.addInitScript(() => {
+        try {
+          const key = 'hoof-and-yeet:v2';
+          const save = JSON.parse(localStorage.getItem(key) || '{"version":2}');
+          localStorage.setItem(
+            key,
+            JSON.stringify({ ...save, controlsSeen: true }),
+          );
+        } catch {
+          /* Tests for unavailable storage retain their explicit setup. */
+        }
+      });
     await context.addInitScript(() => {
       // Clip previews must also remain silent if a test starts native playback.
       // oxlint-disable-next-line typescript/unbound-method

@@ -365,7 +365,7 @@ export const RELICS: Relic[] = [
     'dynamite',
     'Dynamite Diaper',
     '✹',
-    'Use the right control after landing. Blast your wreck and ignite nearby TNT.',
+    'Use the right control after landing. Go nuclear: blast your wreck forward and ignite nearby TNT.',
     'active',
     'dynamite',
   ],

@@ -37,6 +37,12 @@ test('card hover and keyboard focus fit inside perk, level and outfit scroll con
   await pony.hover();
   await pony.focus();
   expect(await topClearance(pony)).toBeGreaterThanOrEqual(8);
+  await pony.evaluate((node) => node.scrollIntoView({ block: 'start' }));
+  await expect.poll(() => topClearance(pony)).toBeGreaterThanOrEqual(8);
+  const hat = page.locator('.hat-option:enabled').first();
+  await hat.evaluate((node) => node.scrollIntoView({ block: 'start' }));
+  await hat.focus();
+  await expect.poll(() => topClearance(hat)).toBeGreaterThanOrEqual(8);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('button', { name: /^PLAY TOUR/ }).click();
   const route = page.locator('.route-card').first();

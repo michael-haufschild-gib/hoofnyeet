@@ -1,8 +1,19 @@
-import { Container, Graphics, Sprite, type Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture, Rectangle } from 'pixi.js';
 import { GROUND_Y } from '../geometry';
 import { noise, type CarnageCue } from '../escalation';
 import type { BodyPose } from '../crash';
 import type { GameState } from '../simulation';
+import { SpectatorShow } from './spectator-show';
+import { AfterlifeQueue } from './afterlife-queue';
+import { CombustionEffects } from './combustion';
+import { SprayEffects } from './spray-effects';
+import { BossShow } from './boss-show';
+import {
+  anatomyPoint,
+  tissueSocket,
+  anatomyIncident,
+  anatomyAntic,
+} from './anatomy-motion';
 
 const INK = 0x502638;
 const RED = 0xbd1742;
@@ -20,9 +31,26 @@ export class CarnageEffects {
   readonly behind = new Container({ label: 'carnage-ground-and-tissue' });
   readonly front = new Container({ label: 'carnage-illustrated-scenes' });
   readonly screen = new Graphics({ label: 'brief-lens-splatter' });
+  private combustion = new CombustionEffects();
+  private spray: SprayEffects;
+  private toothCrown?: Texture;
   private stains = new Graphics({ label: 'persistent-blood-smears' });
   private tissue = new Graphics({ label: 'elastic-anatomy' });
   private drawings = new Graphics({ label: 'animated-mouths-and-machinery' });
+  private afterlifeQueue = new AfterlifeQueue(this.drawings, (...args) =>
+    this.art(...args),
+  );
+  private spectatorInk = new Graphics({ label: 'spectator-sideshow' });
+  private sideshow = new SpectatorShow(this.spectatorInk, (...args) =>
+    this.art(...args),
+  );
+  private bossShow = new BossShow(
+    this.drawings,
+    (...args) => this.art(...args),
+    (...args) => this.mouth(...args),
+    (...args) => this.organ(...args),
+    (...args) => this.ribbon(...args),
+  );
   private actors = new Container({ label: 'carnage-sprite-pool' });
   private pool: Sprite[] = [];
   private used = 0;
@@ -33,8 +61,19 @@ export class CarnageEffects {
   private left = -Infinity;
   private right = Infinity;
   constructor(private textures: Record<string, Texture>) {
-    this.behind.addChild(this.stains, this.tissue);
-    this.front.addChild(this.actors, this.drawings);
+    this.spray = new SprayEffects(textures);
+    this.behind.addChild(
+      this.stains,
+      this.spray.ground,
+      this.combustion.view,
+      this.tissue,
+    );
+    this.front.addChild(
+      this.spray.air,
+      this.actors,
+      this.drawings,
+      this.spectatorInk,
+    );
     for (let i = 0; i < 192; i++) {
       const sprite = new Sprite({ visible: false, anchor: 0.5 });
       this.actors.addChild(sprite);
@@ -65,10 +104,12 @@ export class CarnageEffects {
       return;
     if (this.gentle) {
       if (key === 'skin') key = 'torso';
+      if (key === 'heart') key = 'pastry';
+      if (key === 'brain') key = 'donut';
       if (key === 'sausage') key = 'cube';
       if (
         key.startsWith('skeletal') ||
-        ['bone', 'jam', 'eye', 'skeleton'].includes(key)
+        ['bone', 'jam', 'eye', 'skeleton', 'tooth', 'droplet'].includes(key)
       )
         key = key.includes('leg') ? 'straightLeg' : 'cheese';
       if (key === 'bouquet') key = 'crown';
@@ -76,6 +117,7 @@ export class CarnageEffects {
     const texture = this.textures[key];
     if (!texture) return;
     const p = this.pool[this.used++];
+    p.label = `carnage-${key}`;
     p.texture = texture;
     const scale = Math.min(w / texture.width, h / texture.height);
     p.position.set(x, y);
@@ -125,10 +167,11 @@ export class CarnageEffects {
       alpha: 0.8,
     });
   }
-  private organ(x: number, y: number, size: number, t: number) {
+  private organ(x: number, y: number, size: number, t: number, angle = 0) {
     y = Math.min(y, GROUND_Y - size * 0.58);
-    const g = this.drawings,
+    const g = this.localDrawing(x, y, angle),
       pulse = this.reduced ? 1 : 1 + Math.sin(t * 8) * 0.09;
+    x = y = 0;
     if (this.gentle) {
       g.poly([
         x - size * 0.6,
@@ -155,6 +198,7 @@ export class CarnageEffects {
         size * 0.22,
         size * 0.08,
       ).fill(CREAM);
+      g.restore();
       return;
     }
     g.ellipse(x - size * 0.18, y, size * 0.52, size * 0.38 * pulse)
@@ -175,6 +219,7 @@ export class CarnageEffects {
       .moveTo(x + size * 0.02, y)
       .lineTo(x + size * 0.24, y - size * 0.1)
       .stroke({ color: INK, width: 1.8 });
+    g.restore();
   }
   private mouth(
     x: number,
@@ -183,15 +228,37 @@ export class CarnageEffects {
     h: number,
     t: number,
     open = 1,
+    angle = 0,
   ) {
-    const g = this.drawings,
+    const rootX = x,
+      rootY = y,
+      rootCos = Math.cos(angle),
+      rootSin = Math.sin(angle);
+    const tooth = this.textures.tooth;
+    if (tooth && !this.toothCrown)
+      this.toothCrown = new Texture({
+        source: tooth.source,
+        frame: new Rectangle(
+          0,
+          0,
+          tooth.width,
+          Math.floor(tooth.height * 0.57),
+        ),
+      });
+    const g = this.localDrawing(x, y, angle),
       height = Math.max(8, h * open);
+    x = y = 0;
     g.ellipse(x, y, w / 2 + 5, height / 2 + 5)
       .fill(this.pink)
       .stroke({ color: INK, width: 4 });
+    g.ellipse(x, y + 2, w / 2 + 1, height / 2 + 2).stroke({
+      color: this.red,
+      width: 5,
+    });
     g.ellipse(x, y, w / 2, height / 2).fill(0x451329);
+    g.ellipse(x, y + height * 0.07, w * 0.43, height * 0.34).fill(0x602037);
     g.ellipse(
-      x + Math.sin(t * 4) * w * 0.06,
+      x + (this.reduced ? 0 : Math.sin(t * 4) * w * 0.06),
       y + height * 0.23,
       w * 0.27,
       height * 0.18,
@@ -211,6 +278,30 @@ export class CarnageEffects {
         ])
           .fill(CREAM)
           .stroke({ color: INK, width: 1.4 });
+        if (this.toothCrown && !this.gentle && w > 38) {
+          const length = Math.min(height * 0.31, w * 0.16);
+          const cy = yy - side * length * 0.44;
+          const a = angle + (side < 0 ? Math.PI : 0);
+          const cs = Math.cos(a),
+            sn = Math.sin(a);
+          g.save().setTransform(
+            cs,
+            sn,
+            -sn,
+            cs,
+            rootX + rootCos * xx - rootSin * cy,
+            rootY + rootSin * xx + rootCos * cy,
+          );
+          g.texture(
+            this.toothCrown,
+            0xffffff,
+            -w * 0.055,
+            -length * 0.45,
+            w * 0.11,
+            length * 0.9,
+          );
+          g.restore();
+        }
       }
     }
     if (!this.gentle)
@@ -219,11 +310,35 @@ export class CarnageEffects {
           x + (i - 1) * w * 0.22,
           y + height * 0.43 + 6 + i * 3,
           3.5,
-          10 + Math.sin(t * 5 + i) * 3,
+          10 + (this.reduced ? 0 : Math.sin(t * 5 + i) * 3),
         ).fill(this.red);
+    g.moveTo(-w * 0.34, -height * 0.34)
+      .bezierCurveTo(
+        -w * 0.18,
+        -height * 0.56,
+        w * 0.14,
+        -height * 0.58,
+        w * 0.29,
+        -height * 0.42,
+      )
+      .stroke({
+        color: this.gentle ? 0xf9d6ff : 0xffc3c3,
+        width: Math.max(1.5, w * 0.012),
+        alpha: 0.8,
+        cap: 'round',
+      });
+    g.restore();
   }
-  private eyes(x: number, y: number, size: number, t: number, angry = false) {
-    const g = this.drawings;
+  private eyes(
+    x: number,
+    y: number,
+    size: number,
+    t: number,
+    angry = false,
+    angle = 0,
+  ) {
+    const g = this.localDrawing(x, y, angle);
+    x = y = 0;
     for (const side of [-1, 1]) {
       const xx = x + side * size * 0.67;
       g.ellipse(xx, y, size * 0.57, size * 0.75)
@@ -244,64 +359,14 @@ export class CarnageEffects {
           .lineTo(xx + size * 0.55, y - size * (side < 0 ? 0.55 : 0.9))
           .stroke({ color: INK, width: 4 });
     }
+    g.restore();
   }
   private sprays(cue: CarnageCue, age: number, magnet?: BodyPose) {
     if (age < 0) return;
-    const count = Math.ceil((this.reduced ? 7 : 23) * this.density * cue.power);
-    const moon = cue.world === 'moon';
-    const life = moon ? 3.7 : 1.8;
-    if (age < life)
-      for (let i = 0; i < count; i++) {
-        const n = (k: number) => noise(cue.seed, i * 7 + k);
-        const a = -Math.PI * n(0),
-          speed = (80 + n(1) * 260) * Math.min(1.6, cue.power);
-        let x = cue.x + Math.cos(a) * speed * age;
-        let y =
-          cue.y + Math.sin(a) * speed * age + (moon ? 38 : 205) * age * age;
-        const tooth = i % 7 === 0,
-          bone = i % 11 === 0;
-        if (magnet && (tooth || bone)) {
-          const pull = ease(age / life);
-          x += (magnet.x - x) * pull;
-          y += (magnet.y - y) * pull;
-          if (!this.reduced)
-            this.tissue
-              .moveTo(x, y)
-              .lineTo(magnet.x, magnet.y)
-              .stroke({ color: 0x72f5e3, width: 1.5, alpha: 0.35 });
-        }
-        if (y > GROUND_Y - 3) continue;
-        const alpha = Math.min(1, (life - age) * 3);
-        if (tooth || bone)
-          this.art(
-            bone ? 'bone' : 'eye',
-            x,
-            y,
-            bone ? 26 : 16,
-            bone ? 14 : 18,
-            age * (n(2) - 0.5) * 15,
-            alpha,
-          );
-        else {
-          const r = 2.5 + n(3) * 6;
-          this.drawings
-            .ellipse(x, y, r, r * (1.2 + n(4)))
-            .fill({ color: i % 3 ? this.red : this.pink, alpha });
-          if (i % 3 === 0)
-            this.drawings
-              .circle(x - r * 0.2, y - r * 0.45, r * 0.27)
-              .fill({ color: 0xffc1aa, alpha });
-        }
-        if (cue.world === 'farm' && i % 4 === 0)
-          this.drawings
-            .moveTo(x, y)
-            .lineTo(x + 12, y - 7)
-            .stroke({ color: 0xf9cf67, width: 3, alpha });
-        if (cue.world === 'office' && i % 4 === 0)
-          this.drawings.rect(x, y, 13, 8).fill({ color: CREAM, alpha });
-        if (cue.world === 'afterlife' && i % 5 === 0)
-          this.art('ghost', x, y - 15, 22, 28, 0, alpha * 0.6);
-      }
+    this.spray.cue(cue, age, magnet);
+    // Moving droplets can remain visible after their emitter leaves the camera.
+    // Only source-local effects use the narrow emitter cull.
+    if (cue.x < this.left - 230 || cue.x > this.right + 230) return;
     if (age > 0.2) {
       const growth = ease((age - 0.2) * 2);
       const g = this.stains;
@@ -317,6 +382,12 @@ export class CarnageEffects {
           color: this.pink,
           alpha: 0.65,
         });
+        this.spray.smear(
+          xx,
+          GROUND_Y + 2 + noise(cue.seed, i + 112) * 13,
+          (12 + noise(cue.seed, i + 120) * 38) * growth * 2.5,
+          (3 + noise(cue.seed, i + 128) * 6) * growth * 2.8,
+        );
       }
     }
     if (cue.kind === 'ignite' && age < 0.8) {
@@ -342,6 +413,165 @@ export class CarnageEffects {
         );
       }
   }
+  private localDrawing(x: number, y: number, angle: number, sx = 1, sy = sx) {
+    const c = Math.cos(angle),
+      s = Math.sin(angle);
+    // Pixi's rotateTransform pre-multiplies translation. Set the full local-to-
+    // world matrix so a jaw turns at its socket, never around the world's origin.
+    return this.drawings
+      .save()
+      .setTransform(c * sx, s * sx, -s * sy, c * sy, x, y);
+  }
+  private anatomicalCharacter(b: BodyPose, s: GameState) {
+    const head = b.part.toLowerCase().includes('head');
+    const cue = anatomyIncident(s.wreck!.carnage!.cues, b.id, this.time);
+    const pose = cue && anatomyAntic(b, cue, this.time, this.reduced);
+    if (head && (!pose || b.injury! < 2)) return;
+    const root = pose?.root ?? anatomyPoint(b, 0.13, 0.08);
+    const size = pose?.size ?? Math.max(30, Math.min(54, b.w * 0.5));
+    const sx = pose?.scaleX ?? 1,
+      sy = pose?.scaleY ?? 1;
+    const angle = pose?.angle ?? b.angle;
+    const x = pose?.x ?? root.x;
+    const y = Math.min(pose?.y ?? root.y, GROUND_Y - size * sy * 0.5 - 2);
+    const t = pose?.age ?? 0;
+    const key = head ? 'brain' : 'heart';
+    // The persistent liver/strands remain. A distinct expressive organ sprouts
+    // from the same wound, with a stem connecting it throughout its antics.
+    this.ribbon(
+      root.x,
+      root.y,
+      x,
+      y + size * 0.22,
+      this.time,
+      head ? 4 : 5,
+      this.red,
+      12,
+    );
+    const actor = this.art(key, x, y, head ? size : size * 0.68, size, angle);
+    if (actor) {
+      actor.scale.x *= sx;
+      actor.scale.y *= sy;
+    }
+    if (this.gentle) this.eyes(x + size * 0.06, y, size * 0.12, this.time);
+    if (!pose || this.reduced) return;
+    const g = this.drawings;
+    if (pose.kind === 'defibrillator' && t > 0.55 && t < 2.5) {
+      const ready = ease((t - 0.55) / 0.5),
+        retreat = ease((t - 1.8) / 0.7);
+      const reach = size * (0.68 - ready * 0.32 + retreat * 0.42);
+      for (const side of [-1, 1]) {
+        const px = x + side * reach,
+          py = y + size * 0.13;
+        this.ribbon(
+          root.x + side * 8,
+          root.y,
+          px,
+          py,
+          this.time,
+          3,
+          this.pink,
+          15,
+        );
+        this.art('bone', px, py - 8, 30, 11, side * (-0.9 + ready * 0.8));
+        g.roundRect(px - 5, py - 12, 10, 19, 3)
+          .fill(0xa6dcd0)
+          .stroke({ color: INK, width: 2 });
+      }
+      if (pose.shock > 0.08) {
+        g.moveTo(x - reach, y);
+        for (let i = 1; i <= 9; i++)
+          g.lineTo(
+            x - reach + (i / 9) * reach * 2,
+            y + (i % 2 ? -1 : 1) * (8 + pose.shock * 8),
+          );
+        g.stroke({ color: 0xc2fff1, width: 4 });
+        g.star(
+          x,
+          y,
+          9,
+          size * (0.58 + pose.shock * 0.12),
+          size * 0.45,
+          t,
+        ).stroke({ color: 0xffeb9a, width: 2, alpha: pose.shock });
+      }
+    } else if (pose.kind === 'balloon') {
+      if (t > 0.8 && t < 2.1) {
+        for (let i = 0; i < 3; i++) {
+          const yy = y + size * (0.05 + i * 0.15);
+          g.moveTo(x + size * 0.48, yy)
+            .quadraticCurveTo(x + size * 0.75, yy - 8, x + size * 0.8, yy + 2)
+            .stroke({ color: CREAM, width: 2.2, alpha: pose.balloon });
+        }
+      }
+      if (t > 2 && t < 2.8) {
+        const a = (t - 2) / 0.8;
+        for (let i = 0; i < 7; i++) {
+          const angle = (i * Math.PI * 2) / 7;
+          this.art(
+            i % 2 ? 'eye' : 'heart',
+            x + Math.cos(angle) * (16 + a * 62),
+            y + Math.sin(angle) * (16 + a * 47) + a * a * 22,
+            16,
+            19,
+            angle + a * 4,
+            1 - a,
+          );
+        }
+      }
+    } else if (pose.kind === 'helicopter' && t > 0.22 && t < 3.0) {
+      const snap = Math.max(0, t - 2),
+        hubY = y - size * 0.51;
+      g.moveTo(x, y - size * 0.31)
+        .lineTo(x, hubY)
+        .stroke({ color: this.pink, width: 4 });
+      if (!snap) {
+        for (let i = 0; i < 2; i++) {
+          const turn = t * 28 + (i * Math.PI) / 2;
+          this.art('bone', x, hubY, 76, 18, turn);
+        }
+        g.ellipse(x, hubY, 41, 7).stroke({
+          color: CREAM,
+          width: 2,
+          alpha: 0.6,
+        });
+      } else
+        for (const side of [-1, 1]) {
+          this.art(
+            'bone',
+            x + side * snap * 78,
+            hubY - snap * 50 + snap * snap * 85,
+            47,
+            15,
+            side * snap * 10,
+            Math.max(0, 1 - snap),
+          );
+        }
+    } else if (pose.kind === 'parachute' && t > 0.2 && t < 3.4) {
+      const close = ease((t - 2.15) / 0.3);
+      const canopyY = y - size * (0.8 - close * 0.48);
+      const canopy = this.art(
+        'helmet',
+        x,
+        canopyY,
+        size * (1.5 - close * 0.25),
+        size * 0.92,
+        -0.1 + Math.sin(t * 7) * 0.12,
+      );
+      if (canopy) canopy.scale.y *= 1 - close * 0.5;
+      for (const side of [-1, 1])
+        this.ribbon(
+          x + side * size * 0.49,
+          canopyY + size * 0.09,
+          x + side * size * 0.2,
+          y - size * 0.1,
+          this.time,
+          2,
+          CREAM,
+          0,
+        );
+    }
+  }
   private injuries(s: GameState) {
     const w = s.wreck!;
     const byId = new Map(w.bodies.map((b) => [b.id, b]));
@@ -354,11 +584,13 @@ export class CarnageEffects {
         Math.hypot(from.x - to.x, from.y - to.y) > (a.elastic ? 650 : 310)
       )
         continue;
+      const start = tissueSocket(from, true),
+        end = tissueSocket(to, false);
       this.ribbon(
-        from.x,
-        from.y + 10,
-        to.x,
-        to.y,
+        start.x,
+        start.y,
+        end.x,
+        end.y,
         this.time,
         a.elastic ? 11 : 6,
         this.red,
@@ -370,39 +602,42 @@ export class CarnageEffects {
       if (b.x < this.left - 100 || b.x > this.right + 100) continue;
       if (b.charred && !this.gentle) {
         this.art(b.part, b.x, b.y, b.w, b.h, b.angle, 0.62, 0x321f36);
-        this.drawings
-          .circle(b.x - 8, b.y - 12, 4)
-          .circle(b.x + 8, b.y - 12, 4)
-          .fill(0xfff0c4);
+        const a = anatomyPoint(b, -0.12, -0.12),
+          z = anatomyPoint(b, 0.12, -0.12);
+        this.drawings.circle(a.x, a.y, 4).circle(z.x, z.y, 4).fill(0xfff0c4);
       }
       if (b.part.includes('torso') || b.part === 'cube') {
-        this.organ(
-          b.x + Math.cos(b.angle) * 15,
-          b.y + 13,
-          b.w * 0.28,
-          this.time,
-        );
-        for (let i = 0; i < 3; i++)
+        const liver = anatomyPoint(b, -0.1, 0.23);
+        this.organ(liver.x, liver.y, b.w * 0.23, this.time, b.angle);
+        for (let i = 0; i < 3; i++) {
+          const root = anatomyPoint(b, -0.18 + i * 0.14, 0.24);
           this.ribbon(
-            b.x - 18 + i * 14,
-            b.y + 20,
-            b.x - 18 + i * 15 + Math.sin(this.time * 3 + i) * 10,
-            Math.min(GROUND_Y - 6, b.y + 55 + i * 8),
+            root.x,
+            root.y,
+            root.x + Math.sin(this.time * 3 + i) * 10,
+            Math.min(GROUND_Y - 6, root.y + 35 + i * 8),
             this.time + i,
             6,
           );
+        }
+        this.anatomicalCharacter(b, s);
       } else if (b.part.includes('head') || b.part === 'surprisedHead') {
-        const yy = Math.min(GROUND_Y - 6, b.y + b.h * 0.28);
-        this.drawings.ellipse(b.x - 5, yy, 10, 4).fill(this.red);
+        const wound = anatomyPoint(b, -0.13, 0.28);
+        const yy = Math.min(GROUND_Y - 6, wound.y);
+        this.localDrawing(wound.x, yy, b.angle)
+          .ellipse(0, 0, 10, 4)
+          .fill(this.red)
+          .restore();
         if (b.injury >= 2)
           this.ribbon(
-            b.x - 15,
+            wound.x,
             yy,
-            b.x - 23,
+            wound.x - 12,
             yy + 20 + Math.sin(this.time * 5) * 6,
             this.time,
             5,
           );
+        this.anatomicalCharacter(b, s);
       }
     }
     const grab = w.carnage!.grab;
@@ -518,20 +753,37 @@ export class CarnageEffects {
       }
       case 'mud': {
         const ambulance = s.wreck!.bodies.find((b) => b.part === 'rescue');
-        const xx = ambulance?.x ?? x,
-          yy = ambulance?.y ?? y - 55;
-        for (let i = 0; i < 4; i++)
-          g.ellipse(xx + i * 10 - 20, yy - 12, 9, 6).fill({
+        if (ambulance) {
+          // Painted windshield coordinates, not a screen-space line hovering
+          // over whichever part of the rotating vehicle happens to be below it.
+          this.localDrawing(
+            ambulance.x,
+            ambulance.y,
+            ambulance.angle,
+            ambulance.w,
+            ambulance.h,
+          );
+          for (let i = 0; i < 4; i++)
+            g.ellipse(
+              -0.33 + i * 0.035,
+              -0.19 + Math.sin(i * 2) * 0.03,
+              0.033,
+              0.024,
+            ).fill({ color: this.red, alpha: 0.85 });
+          g.arc(-0.3, -0.087, 0.125, -2, -0.86).stroke({
             color: this.red,
-            alpha: 0.85,
+            width: 0.035,
+            alpha: 0.42,
           });
-        const sweep = Math.sin(t * 11) * 0.9;
-        g.moveTo(xx + 15, yy + 10)
-          .lineTo(
-            xx + 15 + Math.sin(sweep) * 39,
-            yy + 10 - Math.cos(sweep) * 39,
-          )
-          .stroke({ color: INK, width: 4 });
+          const sweep = Math.sin(t * 11) * 0.45 + 0.18;
+          g.moveTo(-0.3, -0.087)
+            .lineTo(
+              -0.3 + Math.sin(sweep) * 0.11,
+              -0.087 - Math.cos(sweep) * 0.16,
+            )
+            .stroke({ color: INK, width: 0.012, cap: 'round' })
+            .restore();
+        }
         for (let i = 0; i < 3; i++) {
           const bx = x - 70 + i * 65,
             by = y - 70 - Math.sin(t * 3 + i) * 15;
@@ -623,21 +875,43 @@ export class CarnageEffects {
         break;
       }
       case 'cartwheel': {
+        g.roundRect(x - 94, y - 20, 194, 15, 7)
+          .fill(this.red)
+          .stroke({ color: INK, width: 3 });
+        g.ellipse(x + 7, y - 11, 106, 8).fill({ color: this.pink, alpha: 0.4 });
         for (let i = 0; i < 8; i++) {
           const xx = x - 76 + i * 22;
-          this.art(
-            'bone',
-            xx,
-            y - 30 - Math.abs(Math.sin(t * 7 + i)) * 5,
-            21,
-            59,
-            Math.PI / 2,
-          );
+          const strike =
+            t < 4.2 ? Math.max(0, Math.cos(t * 9 - i * 0.85)) ** 8 : 0;
+          this.art('bone', xx, y - 36 + strike * 7, 59, 21, Math.PI / 2);
+          // Ivory ribs form actual playable keys. Bone sprites remain as the
+          // knuckles; the authored key silhouette stays clear of the red base.
+          const ky = y - 61 + strike * 7;
+          g.moveTo(xx - 8, ky + 4)
+            .quadraticCurveTo(xx - 11, ky - 3, xx - 4, ky)
+            .quadraticCurveTo(xx, ky - 4, xx + 4, ky)
+            .quadraticCurveTo(xx + 11, ky - 3, xx + 8, ky + 4)
+            .lineTo(xx + 7, y - 13)
+            .quadraticCurveTo(xx, y - 8, xx - 7, y - 13)
+            .closePath()
+            .fill(CREAM)
+            .stroke({ color: INK, width: 2 });
+          g.moveTo(xx - 3, ky + 9)
+            .lineTo(xx - 3, y - 18)
+            .stroke({ color: 0xffffff, width: 2, alpha: 0.65 });
+          if (i % 3 !== 0 && i < 7)
+            g.roundRect(xx + 8, ky + 5, 9, 22, 3)
+              .fill(0x64353b)
+              .stroke({ color: INK, width: 1.5 });
           if (i % 2 === 0)
             this.art(
               'eye',
               xx,
-              y - 55 - Math.abs(Math.sin(t * 7 + i)) * 48,
+              y -
+                68 -
+                Math.abs(Math.sin(Math.min(t, 4.2) * 4.5 - i * 0.425)) *
+                  43 *
+                  (1 - ease((t - 4.2) * 3)),
               22,
               25,
             );
@@ -646,7 +920,11 @@ export class CarnageEffects {
           this.art(
             'straightLeg',
             x - 60 + i * 115,
-            y - 89 - Math.sin(t * 9 + i * 3) * 12,
+            y -
+              88 -
+              Math.abs(Math.sin(Math.min(t, 4.2) * 4.5 + i * 1.5)) *
+                22 *
+                (1 - ease((t - 4.2) * 3)),
             33,
             58,
             i ? 0.7 : -0.7,
@@ -671,7 +949,7 @@ export class CarnageEffects {
           this.art(
             'bone',
             x + 15,
-            y - 26 - Math.max(0, 4.9 - t) * 260,
+            y - 68 - Math.max(0, 4.9 - t) * 260,
             16,
             22,
             0.2,
@@ -732,10 +1010,31 @@ export class CarnageEffects {
           yy = sheep?.y ?? y - 67;
         if (!sheep) this.art('sheep', xx, yy, 163, 143);
         const chew = t < 2.4 ? 0.65 + Math.sin(t * 12) * 0.3 : 0.85;
-        this.mouth(xx + 27, yy + 8, 88, 91, t, chew);
-        this.eyes(xx + 10, yy - 38, 15, t, true);
-        for (let i = 0; i < 3; i++)
-          this.art('bone', xx - 35 + i * 13, yy + 9, 24, 44, t + i, 0.45, INK);
+        const mouth = sheep
+          ? anatomyPoint(sheep, 0.17, 0.056)
+          : { x: xx + 27, y: yy + 8 };
+        const eyes = sheep
+          ? anatomyPoint(sheep, 0.06, -0.266)
+          : { x: xx + 10, y: yy - 38 };
+        const scale = sheep ? sheep.w / 163 : 1,
+          angle = sheep?.angle ?? 0;
+        this.mouth(mouth.x, mouth.y, 88 * scale, 91 * scale, t, chew, angle);
+        this.eyes(eyes.x, eyes.y, 15 * scale, t, true, angle);
+        for (let i = 0; i < 3; i++) {
+          const bone = sheep
+            ? anatomyPoint(sheep, -0.215 + i * 0.08, 0.06)
+            : { x: xx - 35 + i * 13, y: yy + 9 };
+          this.art(
+            'bone',
+            bone.x,
+            bone.y,
+            44 * scale,
+            24 * scale,
+            t + i + angle,
+            0.45,
+            INK,
+          );
+        }
         if (t > 2.4 && t < 4.1) {
           const b = t - 2.4;
           this.art(
@@ -758,14 +1057,28 @@ export class CarnageEffects {
           );
         }
         if (t > 3.8) {
-          this.art('offended-head', xx - 39, yy - 25, 76, 84, -0.4);
+          const head = sheep
+            ? anatomyPoint(sheep, -0.24, -0.175)
+            : { x: xx - 39, y: yy - 25 };
+          this.art(
+            'offended-head',
+            head.x,
+            head.y,
+            76 * scale,
+            84 * scale,
+            angle - 0.4,
+          );
+          const bite = sheep
+            ? anatomyPoint(sheep, -0.073, -0.042)
+            : { x: xx - 12, y: yy - 6 };
           this.mouth(
-            xx - 12,
-            yy - 6,
-            31,
-            28,
+            bite.x,
+            bite.y,
+            31 * scale,
+            28 * scale,
             t,
             0.4 + Math.abs(Math.sin(t * 11)) * 0.6,
+            angle,
           );
         }
         break;
@@ -812,168 +1125,9 @@ export class CarnageEffects {
         break;
       }
       case 'dignified': {
-        const gateX = x + 72;
-        g.roundRect(gateX - 8, y - 122, 16, 113, 4)
-          .fill(0x7799a8)
-          .stroke({ color: INK, width: 3 });
-        for (let i = 0; i < 3; i++) {
-          const a = t * 3 + (i * Math.PI * 2) / 3;
-          g.moveTo(gateX, y - 67)
-            .lineTo(gateX + Math.cos(a) * 42, y - 67 + Math.sin(a) * 30)
-            .stroke({ color: CREAM, width: 7 });
-        }
-        this.art(
-          'reaper',
-          gateX + 61,
-          y - 70,
-          101,
-          145,
-          Math.sin(t * 4) * 0.05,
-        );
-        for (let i = 0; i < 5; i++) {
-          const local = t - i * 0.35;
-          if (local < 0) continue;
-          const reject = clamp((local - 1.8) / 0.5);
-          const size = 74 - i * 9;
-          const xx = x - 97 + i * 23 + Math.min(65, local * 30) - reject * 100;
-          const yy = y - 82 - Math.sin(local * 3) * 8 + reject * 43;
-          this.art(
-            i % 2 ? 'skeleton' : 'ghost-head',
-            xx,
-            yy,
-            size,
-            size * 1.15,
-            reject * 5,
-            0.65,
-            0xa9ffe9,
-          );
-        }
-        if (t > 4) {
-          this.art('helmet', x, y - 31, 78, 62);
-          const escape = 1 - ease((t - 4.4) / 0.8);
-          this.art(
-            'ghost-head',
-            x,
-            y - 38 - escape * 61,
-            15 + escape * 12,
-            22 + escape * 16,
-            0,
-            0.8,
-          );
-          g.moveTo(x - 11, y - 56)
-            .quadraticCurveTo(x - 22, y - 91, x - 5, y - 103)
-            .stroke({ color: 0xbdfae8, width: 2, alpha: 0.7 });
-        }
+        this.afterlifeQueue.draw(x, y, t, this.reduced, this.gentle);
         break;
       }
-    }
-  }
-  private boss(c: CarnageCue, t: number, s: GameState) {
-    if (t < 0 || t > 6) return;
-    const b = s.wreck!.bodies.find((b) => b.id === c.bodyId);
-    const x = b?.x ?? c.x,
-      y = b?.y ?? c.y,
-      g = this.drawings;
-    switch (c.world) {
-      case 'farm':
-        for (let i = 0; i < 4; i++) {
-          const age = Math.max(0, t - i * 0.25),
-            xx = x - age * 65,
-            yy = Math.min(GROUND_Y - 20, y + age * age * 35);
-          this.art('sausage', xx, yy, 66, 48, age * 2);
-          this.ribbon(x, y + 20, xx, yy, age, 7);
-          g.circle(xx, yy, 13).stroke({ color: this.red, width: 3 });
-        }
-        break;
-      case 'candy':
-        for (let i = 0; i < 4; i++)
-          this.mouth(
-            x + Math.sin(t * 3 + i) * 35,
-            y + i * 9,
-            135 - i * 27,
-            128 - i * 24,
-            t + i,
-            0.8 + Math.sin(t * 7 + i) * 0.18,
-          );
-        break;
-      case 'carnival':
-        for (let i = 0; i < 3; i++) {
-          const xx = x - 100 + i * 100;
-          this.art(
-            'skeleton',
-            xx,
-            Math.min(-60, y + 95),
-            66,
-            103,
-            Math.sin(t * 9 + i) * 0.15,
-          );
-          this.art('bone', xx + 28, y + 60, 40, 13, Math.sin(t * 10 + i) * 0.9);
-          if (t > 2.4)
-            this.art(
-              'piano',
-              xx,
-              Math.min(GROUND_Y - 35, y - 190 + (t - 2.4) ** 2 * 130),
-              85,
-              86,
-              0.1,
-            );
-        }
-        break;
-      case 'office':
-        for (let i = 0; i < 5; i++) {
-          const xx = x - 110 + i * 45,
-            yy = Math.min(GROUND_Y - 18, y + 70 + Math.sin(t * 8 + i) * 11);
-          this.organ(xx, yy, 26, t + i);
-          g.rect(xx - 13, yy - 20, 26, 12)
-            .fill(CREAM)
-            .stroke({ color: this.red, width: 2 });
-          this.art(
-            'wing-left',
-            xx,
-            y - 50 - Math.sin(t * 4 + i) * 50,
-            25,
-            40,
-            t + i,
-          );
-        }
-        break;
-      case 'moon':
-        for (let i = 0; i < 8; i++) {
-          const outward = t > 2.4 ? 1 + (t - 2.4) * 0.8 : 1 - t * 0.25;
-          const a = t * 3 + (i * Math.PI) / 4;
-          const xx = x + Math.cos(a) * 110 * outward,
-            yy = y + Math.sin(a) * 70 * outward;
-          this.art(i % 2 ? 'bone' : 'eye', xx, yy, 32, 32, a);
-          this.ribbon(x, y, xx, yy, t + i, 3, 0xaff3c5, 0);
-        }
-        break;
-      case 'afterlife':
-        this.art('skeletal-torso', x, y + 65, 112, 70, Math.sin(t * 8) * 0.1);
-        for (let i = 0; i < 4; i++) {
-          const rise = Math.max(0, t - i * 0.35);
-          this.art(
-            'ghost-head',
-            x + Math.sin(rise * 3) * 25,
-            y + 40 - rise * 65,
-            54 - i * 7,
-            67 - i * 7,
-            0,
-            clamp(1 - rise / 4),
-            0xa9ffe9,
-          );
-        }
-        if (t > 2.4)
-          this.ribbon(
-            x + 50,
-            y - 90,
-            x - 50 + Math.sin(t * 5) * 20,
-            y + 65,
-            t,
-            6,
-            CREAM,
-            -30,
-          );
-        break;
     }
   }
   update(
@@ -987,10 +1141,13 @@ export class CarnageEffects {
     height: number,
   ) {
     this.used = 0;
+    this.spray.reset();
+    this.combustion.reset();
     this.stains.clear();
     this.tissue.clear();
     this.drawings.clear();
     this.screen.clear();
+    this.spectatorInk.clear();
     this.gentle = gentle;
     this.reduced = reduced;
     this.density = density;
@@ -1001,6 +1158,16 @@ export class CarnageEffects {
       this.time = w.time;
       this.left = cameraX - width / zoom / 2 - 80;
       this.right = cameraX + width / zoom / 2 + 80;
+      this.spray.begin(gentle, reduced, density, this.left, this.right);
+      this.combustion.update(
+        frame.cues,
+        w.time,
+        this.left,
+        this.right,
+        reduced,
+        gentle,
+        density,
+      );
       const magnet = s.equipment.includes('magnet')
         ? w.bodies.find((b) => b.id === w.focusId)
         : undefined;
@@ -1012,10 +1179,18 @@ export class CarnageEffects {
       if (scene) {
         this.lateScene(scene, w.time - scene.at, s);
         this.spectators(scene, w.time - scene.at);
+        this.sideshow.draw(scene, w.time, gentle, reduced);
       } else if (s.landing === 'fence' && w.time >= 4.2)
         this.laundry(w.aftermath!.anchorX, w.time);
       for (const c of frame.cues)
-        if (c.kind === 'boss') this.boss(c, w.time - c.at, s);
+        if (c.kind === 'boss')
+          this.bossShow.draw(
+            c,
+            w.time,
+            w.bodies.find((b) => b.id === c.bodyId),
+            gentle,
+            reduced,
+          );
       this.injuries(s);
       if (!reduced) {
         const splash = frame.cues.findLast(
@@ -1036,24 +1211,29 @@ export class CarnageEffects {
               .fill({ color: this.red, alpha });
           }
       }
-      for (const c of frame.cues)
-        if (
-          ['impact', 'ignite', 'confetti', 'release'].includes(c.kind) &&
-          c.x > this.left - 230 &&
-          c.x < this.right + 230
-        )
+      for (const c of frame.cues.toReversed())
+        if (['impact', 'ignite', 'confetti', 'release'].includes(c.kind))
           this.sprays(c, w.time - c.at, magnet);
+      this.spray.end();
     }
     for (let i = this.used; i < this.pool.length; i++)
       this.pool[i].visible = false;
   }
   reset() {
+    this.spray.reset();
+    this.combustion.reset();
     this.stains.clear();
     this.tissue.clear();
     this.drawings.clear();
     this.screen.clear();
+    this.spectatorInk.clear();
     for (const p of this.pool) p.visible = false;
     this.used = 0;
+  }
+  dispose() {
+    this.toothCrown?.destroy();
+    this.spray.dispose();
+    this.combustion.dispose();
   }
   stats() {
     return { allocatedSprites: this.pool.length, visibleSprites: this.used };
