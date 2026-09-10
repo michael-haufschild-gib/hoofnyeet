@@ -12,9 +12,9 @@ import {
 import {
   recordPerkEvent,
   propulsionPuff,
-} from '../lib/game/effects/perk-motion';
-import { ponyPose } from '../lib/game/pose';
-import { PONY_BODY_Y } from '../lib/game/geometry';
+} from '../lib/game/effects/motion/perk-motion';
+import { ponyPose } from '../lib/game/art/pose';
+import { PONY_BODY_Y } from '../lib/game/art/geometry';
 import { replayFrame } from '../lib/game/replay';
 
 function flight(equipment: string[]) {

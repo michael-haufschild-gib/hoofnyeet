@@ -8,9 +8,9 @@ import {
   Texture,
   type Renderer,
 } from 'pixi.js';
-import type { CarnageCue } from '../escalation';
-import { nuclearPose } from './nuclear-motion';
-import { SCENE_MESH_VERTEX, unitMeshQuad } from './scene-mesh';
+import type { CarnageCue } from '../catalogue/escalation';
+import { nuclearPose } from './motion/nuclear-motion';
+import { SCENE_MESH_VERTEX, unitMeshQuad } from './shaders/scene-mesh';
 
 const FRAGMENT = `
 precision highp float;
@@ -29,6 +29,75 @@ void main() {
   vec3 color = mix(hot, vec3(1.0, 0.99, 0.85), 1.0 - smoothstep(0.0, 0.2, r));
   finalColor = vec4(color * mask, mask) * vColor;
 }`;
+
+type NuclearPose = NonNullable<ReturnType<typeof nuclearPose>>;
+
+/**
+ * Pressure rings and the debris fan, drawn in the blast's local space so the
+ * caller's container carries the world position. `density` scales only the
+ * debris count (12 pieces at 1); the three rings are always painted so the
+ * shock reads at any quality. Ring and debris opacity follow `pose.shock`.
+ */
+function drawShock(
+  g: Graphics,
+  pose: NuclearPose,
+  gentle: boolean,
+  density: number,
+) {
+  const color = gentle ? 0x91f7df : 0xffdb79;
+  for (let i = 0; i < 3; i++)
+    g.ellipse(0, 8, pose.radius * (1 - i * 0.11), pose.radius * 0.16).stroke({
+      color: i === 1 ? 0xfff8db : color,
+      width: 14 - i * 3,
+      alpha: pose.shock * (1 - i * 0.18),
+    });
+  // Debris has an origin and a ballistic arc; it never appears at its destination.
+  for (let i = 0; i < Math.ceil(12 * density); i++) {
+    const a = -Math.PI + (i / 11) * Math.PI,
+      t = pose.age;
+    const x = Math.cos(a) * (250 + (i % 3) * 80) * t;
+    const y = Math.sin(a) * 350 * t + 160 * t * t;
+    g.star(x, y, 4, 8, 3, t * 2 + i).fill({ color, alpha: pose.shock });
+  }
+}
+
+/**
+ * The lone survivor in the foreground, offset from the blast origin so it
+ * reads against the cloud. `pose.duckY` and `pose.helmetY` are world rows the
+ * caller has already positioned against; the helmet only lands after 4.1 s.
+ * Sets the layer's alpha to `pose.duck` (0..1) as it fades in and out.
+ */
+function drawDuck(g: Graphics, pose: NuclearPose) {
+  const x = 120,
+    y = pose.duckY - pose.y;
+  g.ellipse(x, -pose.y + 2, 28, 7).fill({
+    color: 0x312831,
+    alpha: 0.23,
+  });
+  g.ellipse(x, y, 26, 19).fill(0xffd649).stroke({ color: 0x452b32, width: 3 });
+  g.circle(x + 16, y - 21, 15)
+    .fill(0xffdf55)
+    .stroke({ color: 0x452b32, width: 3 });
+  g.poly([x + 26, y - 22, x + 41, y - 18, x + 28, y - 13])
+    .fill(0xf07839)
+    .stroke({ color: 0x452b32, width: 2 });
+  g.circle(x + 21, y - 25, 3).fill(0x332536);
+  g.ellipse(x - 2, y, 12, 7).fill(0xf2ad2f);
+  g.poly([x - 23, y - 4, x - 32, y - 14, x - 27, y + 8])
+    .fill(0xffd649)
+    .stroke({ color: 0x452b32, width: 2 });
+  // The sole survivor gets the helmet, two beats after the blast.
+  if (pose.age > 4.1) {
+    const helmetY = pose.helmetY - pose.y;
+    g.ellipse(x + 15, helmetY, 20, 11)
+      .fill(0x417d8a)
+      .stroke({ color: 0x452b32, width: 3 });
+    g.moveTo(x - 7, helmetY + 6)
+      .lineTo(x + 40, helmetY + 3)
+      .stroke({ color: 0x274457, width: 5 });
+  }
+  g.alpha = pose.duck;
+}
 
 /** One ability per attempt, one articulated cloud. No particle/body allocation
  * on impact and no private animation clock, including archived clip playback. */
@@ -153,81 +222,38 @@ export class NuclearEffects {
     u.uGentle = gentle ? 1 : 0;
     const texture = this.art['nuclear-cloud'];
     this.cloud.visible = !!texture;
-    if (texture) {
-      this.cloud.texture = texture;
-      this.cloud.position.set(0, pose.cloudY - pose.y);
-      this.cloud.tint = gentle ? 0xbdffe8 : 0xffffff;
-      this.cloud.alpha = 0.94;
-      const vertices = this.cloud.vertices;
-      for (let row = 0; row < this.rows; row++)
-        for (let col = 0; col < this.columns; col++) {
-          const x = col / (this.columns - 1),
-            y = row / (this.rows - 1),
-            i = (row * this.columns + col) * 2;
-          const billow = reduced
-            ? 0
-            : Math.sin(pose.age * 2.8 + y * 9 + x * 4 + (cue!.seed % 17)) *
-              0.011 *
-              (1 - y);
-          vertices[i] = (x - 0.5 + billow) * pose.width;
-          vertices[i + 1] = (y - 1 + billow * 0.4) * pose.height;
-        }
-    }
-    const color = gentle ? 0x91f7df : 0xffdb79;
-    if (pose.shock > 0.001) {
-      for (let i = 0; i < 3; i++)
-        this.rings
-          .ellipse(0, 8, pose.radius * (1 - i * 0.11), pose.radius * 0.16)
-          .stroke({
-            color: i === 1 ? 0xfff8db : color,
-            width: 14 - i * 3,
-            alpha: pose.shock * (1 - i * 0.18),
-          });
-      // Debris has an origin and a ballistic arc; it never appears at its destination.
-      for (let i = 0; i < Math.ceil(12 * density); i++) {
-        const a = -Math.PI + (i / 11) * Math.PI,
-          t = pose.age;
-        const x = Math.cos(a) * (250 + (i % 3) * 80) * t;
-        const y = Math.sin(a) * 350 * t + 160 * t * t;
-        this.rings
-          .star(x, y, 4, 8, 3, t * 2 + i)
-          .fill({ color, alpha: pose.shock });
+    if (texture) this.billow(texture, pose, cue!, gentle, reduced);
+    if (pose.shock > 0.001) drawShock(this.rings, pose, gentle, density);
+    if (pose.duck > 0) drawDuck(this.foreground, pose);
+  }
+
+  /** Re-poses the cloud's fixed grid in place: the vertex buffer is written,
+   * never reallocated, and `reduced` flattens the billow to a still shape. */
+  private billow(
+    texture: Texture,
+    pose: NuclearPose,
+    cue: CarnageCue,
+    gentle: boolean,
+    reduced: boolean,
+  ) {
+    this.cloud.texture = texture;
+    this.cloud.position.set(0, pose.cloudY - pose.y);
+    this.cloud.tint = gentle ? 0xbdffe8 : 0xffffff;
+    this.cloud.alpha = 0.94;
+    const vertices = this.cloud.vertices;
+    for (let row = 0; row < this.rows; row++)
+      for (let col = 0; col < this.columns; col++) {
+        const x = col / (this.columns - 1),
+          y = row / (this.rows - 1),
+          i = (row * this.columns + col) * 2;
+        const billow = reduced
+          ? 0
+          : Math.sin(pose.age * 2.8 + y * 9 + x * 4 + (cue.seed % 17)) *
+            0.011 *
+            (1 - y);
+        vertices[i] = (x - 0.5 + billow) * pose.width;
+        vertices[i + 1] = (y - 1 + billow * 0.4) * pose.height;
       }
-    }
-    if (pose.duck > 0) {
-      const g = this.foreground,
-        x = 120,
-        y = pose.duckY - pose.y;
-      g.ellipse(x, -pose.y + 2, 28, 7).fill({
-        color: 0x312831,
-        alpha: 0.23,
-      });
-      g.ellipse(x, y, 26, 19)
-        .fill(0xffd649)
-        .stroke({ color: 0x452b32, width: 3 });
-      g.circle(x + 16, y - 21, 15)
-        .fill(0xffdf55)
-        .stroke({ color: 0x452b32, width: 3 });
-      g.poly([x + 26, y - 22, x + 41, y - 18, x + 28, y - 13])
-        .fill(0xf07839)
-        .stroke({ color: 0x452b32, width: 2 });
-      g.circle(x + 21, y - 25, 3).fill(0x332536);
-      g.ellipse(x - 2, y, 12, 7).fill(0xf2ad2f);
-      g.poly([x - 23, y - 4, x - 32, y - 14, x - 27, y + 8])
-        .fill(0xffd649)
-        .stroke({ color: 0x452b32, width: 2 });
-      // The sole survivor gets the helmet, two beats after the blast.
-      if (pose.age > 4.1) {
-        const helmetY = pose.helmetY - pose.y;
-        g.ellipse(x + 15, helmetY, 20, 11)
-          .fill(0x417d8a)
-          .stroke({ color: 0x452b32, width: 3 });
-        g.moveTo(x - 7, helmetY + 6)
-          .lineTo(x + 40, helmetY + 3)
-          .stroke({ color: 0x274457, width: 5 });
-      }
-      g.alpha = pose.duck;
-    }
   }
   reset() {
     this.view.visible = false;

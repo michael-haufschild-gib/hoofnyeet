@@ -6,7 +6,7 @@ import {
   TURNSTILE_ART,
   SOUL_CONTACT,
   SOUL_SPACING,
-} from '../lib/game/effects/afterlife-motion';
+} from '../lib/game/effects/motion/afterlife-motion';
 
 void test('each soul touches the arm before rejection and each arm is ready for the next soul', () => {
   for (let i = 0; i < 5; i++) {

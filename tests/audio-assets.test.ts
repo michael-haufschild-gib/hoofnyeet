@@ -6,7 +6,7 @@ import {
   MUSIC_AUDIO,
   eventAudio,
   levelAudio,
-} from '../lib/game/audio-assets';
+} from '../lib/game/catalogue/audio-assets';
 
 void test('the level preload catalog covers every bundled effect and only the selected music', () => {
   const manifest = JSON.parse(

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rocketRigPose, ROCKET_ART } from '../lib/game/rocket-rig';
+import { rocketRigPose, ROCKET_ART } from '../lib/game/art/rocket-rig';
 import { TRACK } from '../lib/game/simulation';
 
 void test('rocket deployment is continuous at trampoline entry and launch and fires backward', () => {

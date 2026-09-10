@@ -5,8 +5,8 @@ import {
   SIDESHOW_LIFE,
   SIDESHOW_CONTACT,
   SIDESHOW_PUNCHLINE,
-} from '../lib/game/effects/spectator-motion';
-import type { CarnageCue } from '../lib/game/escalation';
+} from '../lib/game/effects/motion/spectator-motion';
+import type { CarnageCue } from '../lib/game/catalogue/escalation';
 const cue: CarnageCue = {
   id: 'landing-1',
   kind: 'landing',

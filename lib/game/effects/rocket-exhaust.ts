@@ -1,6 +1,7 @@
-import { Container, Graphics, type Sprite } from 'pixi.js';
-import { ROCKET_ART } from '../rocket-rig';
-import { flameGeometry, flameMesh } from './flame-mesh';
+import { Container, Graphics, type Sprite, type Renderer } from 'pixi.js';
+import { prepareMesh } from './shaders/prepare-pipelines';
+import { ROCKET_ART } from '../art/rocket-rig';
+import { flameGeometry, flameMesh } from './shaders/flame-mesh';
 
 /** One fixed pair of plumes, owned by PerkEffects. The parent transforms mirror
  * the actual pony and pack; nozzle positions are in the same trimmed texels. */
@@ -14,10 +15,17 @@ export class RocketExhaust {
     flameMesh(this.geometry, 6.3),
   ];
   private disposed = false;
+  private prepared = false;
 
   constructor() {
     this.view.addChild(this.mount);
     this.mount.addChild(this.cones, ...this.flames);
+  }
+
+  prepare(renderer: Renderer, force = false) {
+    if (this.disposed || (this.prepared && !force)) return;
+    prepareMesh(renderer, this.flames[0]);
+    this.prepared = true;
   }
 
   update(

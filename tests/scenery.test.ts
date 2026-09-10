@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spectatorCells } from '../lib/game/terrain';
-import { trampolineBed } from '../lib/game/trampoline';
+import { spectatorCells } from '../lib/game/art/terrain';
+import { trampolineBed } from '../lib/game/art/trampoline';
 import { createGame, STEP, stepGame, TRACK } from '../lib/game/simulation';
 
 void test('camera scroll preserves visible spectator world cells across negative and positive tile boundaries', () => {

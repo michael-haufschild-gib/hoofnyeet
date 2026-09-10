@@ -186,7 +186,7 @@ test('clip export contains video and audio; native sharing is separate', async (
     page.getByRole('button', { name: 'Challenge a friend' }),
   ).toHaveCount(0);
 });
-test('settings, repeat rejection and simultaneous touch release', async ({
+test('a saved settings toggle survives a reload, and a repeated key or touch press does not add a second tap', async ({
   page,
 }, info) => {
   await ready(page);
@@ -274,7 +274,7 @@ test('upgrade choices advance directly, act boundaries offer routes, and shoppin
       },
       { stage, full },
     );
-    await expect(page.getByText('Pick a perk. Keep going.')).toBeVisible();
+    await expect(page.getByText('Pick a perk', { exact: true })).toBeVisible();
   };
   await pitstop(0);
   await page.locator('.relic-card').first().click();

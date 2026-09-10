@@ -7,7 +7,10 @@
       "source": "/Users/Spare/.codex/generated_images/01a07ca8-6861-7383-9a9f-2dc353368f59/exec-a04549e2-4220-49ce-8a25-f46153ab1f59.png",
       "width": 192,
       "height": 100,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.5462247380239521,
       "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/carnage/originals/sausage.png",
@@ -21,7 +24,10 @@
       "source": "/Users/Spare/.codex/generated_images/01a07ca8-6861-7383-9a9f-2dc353368f59/exec-872e80e5-21e9-4ac0-8500-73fb5d3cb1dd.png",
       "width": 268,
       "height": 320,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.5971198694029851,
       "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/carnage/originals/bouquet.png",
@@ -35,7 +41,10 @@
       "source": "/Users/Spare/.codex/generated_images/01a07ca8-6861-7383-9a9f-2dc353368f59/exec-c089610d-6923-4302-b53e-05efd9029a35.png",
       "width": 320,
       "height": 250,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.5545190868263473,
       "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/carnage/originals/skin.png",
@@ -54,7 +63,10 @@
       "generatedAt": "2026-09-08",
       "width": 166,
       "height": 256,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.3689005319473545,
       "verified": true,
@@ -71,7 +83,10 @@
       "generatedAt": "2026-09-08",
       "width": 256,
       "height": 231,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.3938960031537317,
       "verified": true,
@@ -88,7 +103,10 @@
       "generatedAt": "2026-09-08",
       "width": 256,
       "height": 228,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.6572779605263158,
       "verified": true,
@@ -105,7 +123,10 @@
       "generatedAt": "2026-09-08",
       "width": 256,
       "height": 232,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.7594288793103449,
       "verified": true,
@@ -122,7 +143,10 @@
       "generatedAt": "2026-09-08",
       "width": 224,
       "height": 256,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.7099783761160714,
       "verified": true,
@@ -139,8 +163,14 @@
       "generatedAt": "2026-09-08",
       "width": 84,
       "height": 256,
-      "anchor": [0.5, 0.5],
-      "axle": [0.378, 0.466],
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "axle": [
+        0.378,
+        0.466
+      ],
       "alpha": true,
       "verified": true,
       "bytes": 10854
@@ -156,7 +186,10 @@
       "generatedAt": "2026-09-08",
       "width": 43,
       "height": 96,
-      "anchor": [0.5, 0.77],
+      "anchor": [
+        0.5,
+        0.77
+      ],
       "alpha": true,
       "opaqueRatio": 0.528343023255814,
       "verified": true,
@@ -173,7 +206,10 @@
       "generatedAt": "2026-09-08",
       "width": 192,
       "height": 60,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.4890625,
       "verified": true,
@@ -190,7 +226,10 @@
       "generatedAt": "2026-09-08",
       "width": 103,
       "height": 128,
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "alpha": true,
       "opaqueRatio": 0.6924302184466019,
       "verified": true,
@@ -207,10 +246,61 @@
       "generatedAt": "2026-09-08",
       "width": 533,
       "height": 640,
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "alpha": true,
       "verified": true,
       "bytes": 80986
+    },
+    {
+      "id": "organ-cart",
+      "world": "candy",
+      "source": "/Users/Spare/.codex/generated_images/01a07ca8-6861-7383-9a9f-2dc353368f59/exec-976469a9-dcb7-487a-820b-eb119b323e59.png",
+      "prompt": "Use case: illustration-story. Asset type: ONE original transparent-background 2D game prop for Hoof & Yeet, a richly illustrated cute pony cartoon disaster game. A bizarre small CARNIVOROUS ICE-CREAM HANDCART. Three-quarter side view facing RIGHT, compatible with a flat side-view game. A rounded coral-red and mint-green ice cream pushcart on two chunky cream-and-brass wheels, with a short striped pink canopy on two crooked supports. The serving hatch is a HUGE grinning mouth with glossy cherry-red gums and chunky ivory teeth. Its DARK OPEN HATCH is EMPTY: leave a clear open dark cavity for separately animated cartoon organs and scoops. Two expressive half-lidded small eyes above the hatch on the front fascia convey sinister hospitality. A tiny dangling gold serving bell. The cart handle points left. No person, pony, driver or customer. Strong readable compact silhouette, full object including canopy, wheels and handle visible. Polished hand-painted animation-cel/storybook rendering, broad dark plum ink outlines, soft rich shadows, cream highlights, tactile glossy paint, high-end detailed cartoon illustration, exaggerated absurdity, no realism. Palette: coral, pale mint, cream, warm brass, dark plum, cherry red jelly. No external debris, no loose organs, no text/signage/letters/numbers/logos, no background or floor or cast shadow, no sprite sheet or panel or checkerboard. Isolated on genuinely TRANSPARENT ALPHA background with generous padding. One coherent cart only.",
+      "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/encores/originals/organ-cart.png",
+      "masterPath": "assets/source-art/masters/carnage/organ-cart.webp",
+      "productionPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/encores/production/organ-cart.webp",
+      "path": "/art/carnage/organ-cart.webp",
+      "width": 384,
+      "height": 348,
+      "bytes": 40612,
+      "foot": 0.982759,
+      "alpha": true,
+      "verified": true
+    },
+    {
+      "id": "lunar-blender",
+      "world": "moon",
+      "source": "/Users/Spare/.codex/generated_images/01a07ca8-6861-7383-9a9f-2dc353368f59/exec-c6cad5e8-0f80-4d72-a105-84b938883ff4.png",
+      "prompt": "Use case: illustration-story. Asset type: ONE original transparent-background 2D machine prop for Hoof & Yeet, a lavish illustrated cute pony disaster game. A ridiculous LUNAR VACUUM BLENDER shaped like a squat retro flying saucer with a tall empty glass mixing jar. Side-view three-quarter perspective facing RIGHT. Warm butter-yellow metal flying saucer base with four brass feet and teal riveted panels. Large bulbous EMPTY glass jar in the middle, pale turquoise outer highlights and an open clear inner window so separately animated objects can be drawn inside. A bent spout at upper right, a little mushroom-shaped glass lid, and one large circular glowing pink power button in the metal base. Two small cartoon eyes on its base look smug, and an absurd ivory toothy grille makes the base a grin. A short cream flexible suction hose curls from the left side, ending in a wide trumpet nozzle facing left; no debris emerging yet. Entire machine visible, compact clear 0.9:1 width-to-height silhouette. Polished hand-painted animation cel with warm dimensional painterly shading and thick DARK PLUM ink outlines, tactile retro enamel and glass, saturated yellow/teal/coral/brass. Cozy bizarre cartoon machinery, never realistic gore. Machine body only: no pony, body parts, surrounding objects or text. Full object isolated with10percent genuine transparent alpha padding. No backdrop, floor, exterior cast shadow, labels, numbers, letters, logos, watermark, panel, sprite sheet, checkerboard. Keep jar inner window largely transparent for separate animation, with faint glass tint and polished rim.",
+      "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/encores/originals/lunar-blender.png",
+      "masterPath": "assets/source-art/masters/carnage/lunar-blender.webp",
+      "productionPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/encores/production/lunar-blender.webp",
+      "path": "/art/carnage/lunar-blender.webp",
+      "width": 384,
+      "height": 343,
+      "bytes": 41684,
+      "foot": 0.982507,
+      "alpha": true,
+      "verified": true
+    },
+    {
+      "id": "soul-toaster",
+      "world": "afterlife",
+      "source": "/Users/Spare/.codex/generated_images/01a07ca8-6861-7383-9a9f-2dc353368f59/exec-c0142054-9288-4f80-8cb6-a3c5c10fae87.png",
+      "prompt": "Use case: illustration-story. Asset type: ONE original transparent-background 2D prop for Hoof & Yeet, a lush storybook illustrated pony slapstick game. A demented AFTERLIFE TOASTER: a squat vintage two-slot toaster made of pearly lavender enamel and aged brass, with a big grinning ivory skull face integrated into its front, enormous glossy plum eye sockets, a tiny mint halo attached by a bent copper wire, and a bone-shaped side lever. Three-quarter SIDE VIEW facing RIGHT, slightly above so both dark EMPTY top slots are clearly visible, ready for separately animated ghost bread. Four short splayed brass feet. An unplugged mint electrical cord curls along its LEFT side and ends in a tiny bony skeletal hand instead of a plug. A few glossy cherry-red jelly drips run from the front grille. A little translucent mint spectral flame in one empty eye socket, contained inside the silhouette. Compact broad 1.1:1 width to height, rounded friendly shapes but hilariously ominous. No bread or ghost or other loose object inside or above the slots: they will be animated separately in the game. Rich warm painterly shadow, cream cel highlights, strong thick DARK PLUM ink outlines, high-end hand-painted animation illustration, tactile metal, absurd cartoon dark humor and cute expressive machine personality. Complete toaster including cord, feet, halo and lever centered with generous genuine TRANSPARENT ALPHA padding. No pony, wearer, people, floor, cast shadow, background, text, labels, numbers, logos, watermark, panel, sprite sheet or checkerboard. One single coherent toaster only.",
+      "originalPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/encores/originals/soul-toaster.png",
+      "masterPath": "assets/source-art/masters/carnage/soul-toaster.webp",
+      "productionPath": "/Users/Spare/Documents/code/hoof-and-yeet-assets/art/encores/production/soul-toaster.webp",
+      "path": "/art/carnage/soul-toaster.webp",
+      "width": 384,
+      "height": 352,
+      "bytes": 43802,
+      "foot": 0.982955,
+      "alpha": true,
+      "verified": true
     }
   ]
 }

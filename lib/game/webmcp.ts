@@ -11,6 +11,12 @@ interface ModelContext {
     options: { signal: AbortSignal },
   ): void | Promise<void>;
 }
+/**
+ * Publishes the read, start and action tools on the browser's model context so
+ * an agent can drive the game, and returns a disposer that revokes them. A
+ * browser without a model context registers nothing and yields a no-op
+ * disposer; a rejected registration is swallowed rather than breaking the page.
+ */
 export function registerGameTools(game: GameController) {
   const context = (document as Document & { modelContext?: ModelContext })
     .modelContext;

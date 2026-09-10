@@ -7,7 +7,7 @@ import {
   collisionOutline,
   fitArt,
   GROUND_Y,
-} from '../lib/game/geometry';
+} from '../lib/game/art/geometry';
 
 void test('illustrated props settle on the visible floor at varied orientations without an invisible gap', async () => {
   await initPhysics();

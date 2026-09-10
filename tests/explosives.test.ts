@@ -47,7 +47,7 @@ void test('a TNT impact consumes the boxes in a bounded, single-award chain reac
   }
 });
 
-void test('scenery settling alone does not ignite TNT', async () => {
+void test('scenery settling under its own weight produces no havoc and no explosion sound', async () => {
   await initPhysics();
   const s = scenario();
   s.vx = s.vy = 0;

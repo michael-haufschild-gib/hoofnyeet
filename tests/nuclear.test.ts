@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CrashWorld, initPhysics } from '../lib/game/crash';
 import { createGame, STEP } from '../lib/game/simulation';
-import { NUCLEAR_LIFE, nuclearPose } from '../lib/game/effects/nuclear-motion';
+import {
+  NUCLEAR_LIFE,
+  nuclearPose,
+} from '../lib/game/effects/motion/nuclear-motion';
 import { defaultSave, readSave, writeSave } from '../lib/game/storage';
 
 void test('dynamite records one nuclear origin and sound while retaining its forward explosion', async () => {
@@ -67,12 +70,13 @@ void test('first-run guidance is opt-in for fresh saves and does not interrupt e
     },
   );
   assert.equal(readSave({ getItem: () => wire }).controlsSeen, true);
-  assert.doesNotThrow(() =>
+  assert.equal(
     writeSave(fresh, {
       setItem: () => {
         throw new Error('blocked');
       },
     }),
+    false,
   );
 });
 
@@ -89,8 +93,11 @@ void test('late nuclear incidents finish their recorded payoff before settlement
   try {
     for (let i = 0; i < 1600; i++) c.step(STEP);
     c.action('secondary');
-    const cue = c.snapshot().carnage!.cues.find((c) => c.kind === 'nuclear')!;
-    assert.ok(cue);
+    const nuclearCues = c
+      .snapshot()
+      .carnage!.cues.filter((c) => c.kind === 'nuclear');
+    assert.equal(nuclearCues.length, 1);
+    const cue = nuclearCues[0];
     for (let tick = 0; tick < Math.floor(NUCLEAR_LIFE * 120) - 1; tick++) {
       c.step(STEP);
       assert.equal(c.snapshot().settled, false);
@@ -105,7 +112,7 @@ void test('late nuclear incidents finish their recorded payoff before settlement
         break;
       }
     }
-    assert.ok(settled);
+    assert.equal(settled, true, 'the nuclear payoff never reached settlement');
   } finally {
     c.dispose();
   }

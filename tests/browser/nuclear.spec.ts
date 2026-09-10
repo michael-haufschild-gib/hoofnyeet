@@ -27,7 +27,7 @@ test('nuclear cloud is preloaded with dynamite and its whole incident survives p
   const proof = await page.evaluate(async () => {
     const crashPath = '/lib/game/crash.ts',
       simPath = '/lib/game/simulation.ts',
-      motionPath = '/lib/game/effects/nuclear-motion.ts';
+      motionPath = '/lib/game/effects/motion/nuclear-motion.ts';
     const { CrashWorld, initPhysics } = await import(crashPath);
     const { createGame, STEP } = await import(simPath);
     const { nuclearPose } = await import(motionPath);

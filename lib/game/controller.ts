@@ -1,59 +1,60 @@
-import { INCIDENT_WINDOW } from './escalation';
 import {
   act,
   applyCrashFrame,
   createClock,
   createGame,
-  jumpTarget,
-  startGame,
-  STEP,
   type Action,
   type GameState,
   type Hat,
 } from './simulation';
 import { GameRenderer } from './renderer';
-import { ponyUnlocked, type PonyId } from './cosmetics';
-import {
-  applyChallenge,
-  challengeUnlocked,
-  type ChallengeRule,
-} from './challenge-rules';
+import { type PonyId } from './catalogue/cosmetics';
 import { HorseAudio } from './audio';
-import { replayFrame, replayEvent, replayLeadIn } from './replay';
-import {
-  defaultSave,
-  finishRound,
-  readSave,
-  writeSave,
-  type SaveData,
-} from './storage';
+import { replayLeadIn } from './replay';
+import { defaultSave, readSave, writeSave, type SaveData } from './storage';
 import { CrashWorld, initPhysics } from './crash';
-import { saveIncident } from './sharing';
+import { type WorldId } from './content';
+import { type Campaign } from './campaign';
 import {
-  modifiers,
-  worldById,
-  relicArt,
-  type Ability,
-  type WorldId,
-} from './content';
-import { recordPerkEvent } from './effects/perk-motion';
-import {
-  newRun,
-  beginAttempt,
-  settleAttempt,
   takeRelic,
   buyEquipment,
   buyInsurance,
   reroll,
   nextStage,
-  items,
-  objective,
-  parseChallenge,
-  dailyRecordKey,
   type RunMode,
   type RunState,
 } from './run';
+import {
+  buildRecording,
+  sessionSnapshot,
+  viewState,
+} from './session/session-view';
+import {
+  bindSession,
+  handleKeyDown,
+  restorePicture,
+  unbindSession,
+} from './session/session-input';
+import { applyPreference } from './session/session-preferences';
+import {
+  beginRun,
+  chooseCampaign,
+  startChallengeLink,
+} from './session/session-progress';
+import { launchLevel } from './session/level-preparation';
+import { advanceFrame, drainEvents } from './session/frame-loop';
+
+/** The interface surface currently on screen. */
 export type Screen = 'home' | 'briefing' | 'game' | 'results' | 'pitstop';
+
+/**
+ * One published reading of the session for React.
+ *
+ * Every field is a copy, so holding a view state cannot mutate the live
+ * session. `ready` folds in the picture's health: a lost WebGL context reads
+ * as not ready even once loading has finished. `preparation` is non-null only
+ * while a course is loading, and `fps` is a smoothed whole number.
+ */
 export interface ViewState {
   game: GameState;
   save: SaveData;
@@ -65,9 +66,20 @@ export interface ViewState {
   preparation: { world: WorldId; progress: number; failed: boolean } | null;
   tutorial: boolean;
   newBest: boolean;
+  newTourBest: boolean;
   newHats: Hat[];
+  wardrobe: { hat: Hat; loading: boolean; error: string } | null;
   fps: number;
 }
+
+/**
+ * A shareable incident: the retained frames, the events that dressed them and
+ * the outfit they were performed in.
+ *
+ * `duration` is in seconds of recording clock, which includes hit freezes.
+ * `contentVersion` lets a later build reject a recording it can no longer
+ * reproduce.
+ */
 export interface Recording {
   contentVersion?: number;
   appearance?: { hat: Hat; ponyId?: PonyId; gentle: boolean; reduced: boolean };
@@ -75,6 +87,16 @@ export interface Recording {
   events: GameState['events'];
   duration: number;
 }
+
+/**
+ * Owns one play session: the save, the run, the input, the frame loop and the
+ * renderer it drives.
+ *
+ * Construction starts the animation loop immediately, so the title screen
+ * paints while the artwork is still loading. Every state change ends in
+ * `publish`, which is the only way the interface hears about it. Call
+ * `dispose` to release the listeners, the physics world and the canvas.
+ */
 export class GameController {
   state = createGame();
   save = defaultSave();
@@ -88,35 +110,38 @@ export class GameController {
   preparation: ViewState['preparation'] = null;
   tutorial = false;
   newBest = false;
+  newTourBest = false;
   newHats: Hat[] = [];
+  wardrobe: ViewState['wardrobe'] = null;
+  hatRequest = 0;
   fps = 60;
-  private clock = createClock();
-  private raf = 0;
-  private last = 0;
-  private lastPublish = 0;
-  private frames: GameState[] = [];
-  private attemptAppearance: Recording['appearance'];
-  private recordedEvents: GameState['events'] = [];
-  private recordTick = 0;
-  private recordTime = 0;
-  private disposed = false;
-  private held = new Set<string>();
-  private storage: Storage | undefined;
-  private savedRound = -1;
-  private observer: ResizeObserver;
-  private caption: Element | null;
-  private hud: Element | null = null;
-  private resizePending = false;
-  private pausedPictureReady = false;
-  private crash: CrashWorld | null = null;
-  private previousSimTime = 0;
-  private replayTime = 0;
-  private replayEvent = 0;
-  private replaySession = 0;
-  private lastAssist = 0;
-  private preparationId = 0;
-  private preparationInterrupted = false;
-  private abilityIcons = new Map<string, HTMLImageElement>();
+  clock = createClock();
+  raf = 0;
+  last = 0;
+  lastPublish = 0;
+  frames: GameState[] = [];
+  attemptAppearance: Recording['appearance'];
+  recordedEvents: GameState['events'] = [];
+  recordTick = 0;
+  recordTime = 0;
+  disposed = false;
+  held = new Set<string>();
+  storage: Storage | undefined;
+  savedRound = -1;
+  observer: ResizeObserver;
+  caption: Element | null;
+  hud: Element | null = null;
+  resizePending = false;
+  pausedPictureReady = false;
+  crash: CrashWorld | null = null;
+  previousSimTime = 0;
+  replayTime = 0;
+  replayEvent = 0;
+  replaySession = 0;
+  lastAssist = 0;
+  preparationId = 0;
+  preparationInterrupted = false;
+  abilityIcons = new Map<string, HTMLImageElement>();
   constructor(
     canvas: HTMLCanvasElement,
     private onView: (v: ViewState) => void,
@@ -134,29 +159,12 @@ export class GameController {
     this.observer.observe(canvas.parentElement ?? canvas);
     this.caption = canvas.parentElement?.querySelector('.ticker') ?? null;
     if (this.caption) this.observer.observe(this.caption);
-    window.addEventListener('keydown', this.keyDown);
-    window.addEventListener('keyup', this.keyUp);
-    window.addEventListener('blur', this.blur);
-    document.addEventListener('visibilitychange', this.visibility);
-    canvas.addEventListener('webglcontextlost', this.graphicsInterrupted);
-    canvas.addEventListener('webglcontextrestored', this.graphicsRestored);
+    bindSession(this, canvas);
     void Promise.all([this.renderer.load(), initPhysics()])
       .then(() => {
         if (this.disposed) return;
         this.ready = true;
-        const challenge = parseChallenge(window.location.search);
-        if (challenge) {
-          this.run = newRun(
-            challenge.mode,
-            challenge.seed,
-            challenge.assisted,
-            challenge.date,
-            challenge.rules,
-          );
-          this.run.target = challenge.target;
-          this.run.pool = challenge.pool;
-          this.screen = 'briefing';
-        }
+        startChallengeLink(this, window.location.search);
         this.publish();
       })
       .catch((e: Error) => {
@@ -165,7 +173,9 @@ export class GameController {
       });
     this.raf = requestAnimationFrame(this.frame);
   }
-  private syncPreferences() {
+
+  /** Pushes the saved settings onto the audio and drawing owners. */
+  syncPreferences() {
     this.pausedPictureReady = false;
     this.audio.music = this.save.music;
     this.audio.effects = this.save.effects;
@@ -175,6 +185,14 @@ export class GameController {
     this.renderer.ponyId = this.save.pony;
     this.renderer.best = this.save.best;
   }
+
+  /**
+   * Changes one saved setting, persists it and republishes.
+   *
+   * A locked pony, a locked challenge, an unowned hat or a key already bound
+   * to the other control is rejected silently. Choosing a hat whose artwork is
+   * not resident yet defers the change until it loads.
+   */
   setPreference<
     K extends
       | 'music'
@@ -188,26 +206,11 @@ export class GameController {
       | 'primaryKey'
       | 'secondaryKey',
   >(key: K, value: SaveData[K]) {
-    if (key === 'hat' && !this.save.hats.includes(value as Hat)) return;
-    if (key === 'pony' && !ponyUnlocked(value as PonyId, this.save)) return;
-    if (
-      key === 'challenge' &&
-      !challengeUnlocked(value as ChallengeRule, this.save.wins)
-    )
-      return;
-    if (
-      (key === 'primaryKey' || key === 'secondaryKey') &&
-      value === this.save[key === 'primaryKey' ? 'secondaryKey' : 'primaryKey']
-    )
-      return;
-    this.save = { ...this.save, [key]: value };
-    this.persist();
-    this.syncPreferences();
-    this.publish();
-    if ((key === 'music' || key === 'effects') && !this.state.paused)
-      void this.audio.unlock();
+    applyPreference(this, key, value);
   }
-  private persist() {
+
+  /** Writes the save, keeping a resumable tour alongside it. */
+  persist() {
     // Preferences and a quick round must not erase a tour waiting to be resumed.
     if (this.run && this.run.mode !== 'quick')
       this.save.run = !['won', 'lost'].includes(this.run.status)
@@ -215,27 +218,23 @@ export class GameController {
         : null;
     writeSave(this.save, this.storage);
   }
-  startRun(mode: RunMode) {
-    if (!this.ready || this.graphicsLost) return;
-    this.error = '';
-    this.preparation = null;
-    this.run = newRun(
-      mode,
-      undefined,
-      this.save.assisted,
-      undefined,
-      this.save.challenge,
-    );
-    if (mode !== 'daily') this.run.pool = [...this.save.unlocked];
-    this.state = createGame(this.state.round);
-    this.screen = 'briefing';
-    this.crash?.dispose();
-    this.crash = null;
-    this.renderer.reset();
-    this.persist();
-    void this.audio.unlock();
-    this.publish();
+
+  /** Starts a fresh run of `mode` and shows its briefing. */
+  startRun(mode: RunMode, campaign = this.save.campaign) {
+    beginRun(this, mode, campaign);
   }
+
+  /** Picks the storyline for a tour that has not taken its first attempt. */
+  selectCampaign(campaign: Campaign) {
+    chooseCampaign(this, campaign);
+  }
+
+  /**
+   * Reopens the saved tour where it left off.
+   *
+   * A stage that is mid-act, or one already carrying a result, launches
+   * straight into its course instead of stopping on the briefing.
+   */
   async resumeRun() {
     if (!this.save.run || !this.ready || this.graphicsLost) return;
     this.run = structuredClone(this.save.run);
@@ -248,6 +247,8 @@ export class GameController {
     )
       await this.launch();
   }
+
+  /** Abandons whatever is on screen and returns to the title. */
   home() {
     this.tutorial = false;
     this.preparationId++;
@@ -265,157 +266,32 @@ export class GameController {
     this.persist();
     this.publish();
   }
+
+  /** Starts a one-off round, defaulting to the world a quick run is already on. */
   start(world: WorldId = this.run?.mode === 'quick' ? this.run.world : 'farm') {
     this.startRun('quick');
     void this.launch(world);
   }
-  private async prepareAbilityIcon(ability: string) {
-    const src = relicArt(ability);
-    if (this.abilityIcons.has(src)) return;
-    // Pixi's ImageBitmap cache is separate from HTML <img> decoding. Keep the
-    // actual HUD image resident before React mounts the in-game ability hint.
-    const image = new Image();
-    image.src = src;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      await Promise.race([
-        image.decode(),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () =>
-              reject(new Error('Ability illustration timed out. Try again.')),
-            20000,
-          );
-        }),
-      ]);
-      if (!this.disposed) this.abilityIcons.set(src, image);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
+
+  /** Prepares a course and drops the player into it. */
   async launch(world?: WorldId) {
-    if (!this.ready || !this.run || this.graphicsLost) return;
-    const selected = world ?? this.run.world,
-      run = this.run;
-    if (!['briefing', 'playing'].includes(this.run.status)) return;
-    this.ready = false;
-    this.error = '';
-    const preparationId = ++this.preparationId;
-    this.preparationInterrupted = false;
-    this.preparation = { world: selected, progress: 0, failed: false };
-    this.clearInputs();
-    // Invoke inside the original click/tap, before awaiting any network work.
-    // Context creation is synchronous; suspended contexts can still decode.
-    void this.audio.unlock();
-    this.publish();
-    try {
-      const completion = [0, 0, 0];
-      const progress = (part: number, value: number) => {
-        if (
-          this.disposed ||
-          preparationId !== this.preparationId ||
-          !this.preparation
-        )
-          return;
-        completion[part] = value;
-        this.preparation.progress =
-          completion[0] * 0.48 + completion[1] * 0.48 + completion[2] * 0.04;
-        this.publish();
-      };
-      await Promise.all([
-        this.renderer.prepareLevel(
-          selected,
-          this.save.pony,
-          (p) => progress(0, p),
-          run.ability as Ability,
-        ),
-        this.audio.prepareLevel(
-          selected,
-          objective({ ...run, world: selected }).boss,
-          (p) => progress(1, p),
-        ),
-        this.prepareAbilityIcon(run.ability).then(() => progress(2, 1)),
-      ]);
-      if (
-        this.disposed ||
-        preparationId !== this.preparationId ||
-        this.run !== run
-      )
-        return;
-      if (this.graphicsLost)
-        throw new Error(
-          'Course preparation was interrupted. Try again when the picture recovers.',
-        );
-      if (!beginAttempt(run, selected)) {
-        this.preparation = null;
-        return;
-      }
-      this.attemptAppearance = {
-        hat: this.save.hat,
-        ponyId: this.save.pony,
-        gentle: this.save.gentle,
-        reduced: this.save.reduced,
-      };
-      Object.assign(this.renderer, this.attemptAppearance);
-      startGame(this.state);
-      this.tutorial = !this.save.controlsSeen && this.save.rounds === 0;
-      this.state.paused =
-        this.tutorial || this.preparationInterrupted || document.hidden;
-      if (this.run.attempt > 1 || this.save.rounds > 0)
-        this.state.phaseTime = 1.45;
-      const equipment = items(this.run),
-        mod = applyChallenge(
-          modifiers(equipment, this.run.world),
-          this.run.rules,
-        );
-      Object.assign(this.state, {
-        world: this.run.world,
-        equipment,
-        ability: this.run.ability as Ability,
-        mod,
-        reactive: true,
-        boss: objective(this.run).boss,
-        seed: this.run.seed + this.run.stage * 719,
-        disaster: (this.run.seed + this.run.stage) % 4,
-        maxFlaps: mod.maxFlaps,
-        flaps: mod.maxFlaps,
-      });
-      this.screen = 'game';
-      this.preparation = null;
-      this.clock.reset();
-      this.frames = [];
-      this.recordedEvents = [];
-      this.previousSimTime = 0;
-      this.recordTick = 0;
-      this.recordTime = 0;
-      this.lastAssist = 0;
-      this.crash?.dispose();
-      this.crash = null;
-      this.renderer.reset();
-      this.audio.reset();
-      this.pausedPictureReady = false;
-      this.held.clear();
-      this.newBest = false;
-      this.newHats = [];
-      this.persist();
-      if (this.state.paused) this.audio.pause();
-    } catch (e) {
-      if (this.disposed || preparationId !== this.preparationId) return;
-      this.error = (e as Error).message;
-      if (this.preparation) this.preparation.failed = true;
-    } finally {
-      if (!this.disposed && preparationId === this.preparationId) {
-        this.ready = true;
-        this.publish();
-      }
-    }
+    await launchLevel(this, world);
   }
+
+  /** Opens the between-stage shop when the run has reached one. */
   pitstop() {
     if (this.run?.status === 'pitstop') {
       this.screen = 'pitstop';
       this.publish();
     }
   }
+
+  /**
+   * Takes the stage reward or buys an item, optionally replacing one held.
+   *
+   * Returns false when the run cannot afford it or the slot cannot be filled,
+   * leaving the save untouched.
+   */
   choose(id: string, replace?: string) {
     if (
       this.run &&
@@ -430,18 +306,30 @@ export class GameController {
     }
     return false;
   }
+
+  /** Buys the run one retry, if it can afford one. */
   insurance() {
     if (this.run && buyInsurance(this.run)) {
       this.persist();
       this.publish();
     }
   }
+
+  /** Pays to redraw the shop's offer, if the run can afford it. */
   reroll() {
     if (this.run && reroll(this.run, this.save.unlocked)) {
       this.persist();
       this.publish();
     }
   }
+
+  /**
+   * Advances the run to its next stage.
+   *
+   * World choice belongs at the start of an act, so `playImmediately` only
+   * skips the briefing for a stage inside one; otherwise the next world's
+   * artwork is fetched in the background while the player chooses.
+   */
   async next(playImmediately = false) {
     if (this.run && nextStage(this.run)) {
       this.screen = 'briefing';
@@ -449,12 +337,18 @@ export class GameController {
       this.state.world = this.run.world;
       this.persist();
       this.publish();
-      // World choice belongs at the start of an act. Regular events continue
-      // directly after the player's upgrade, retaining the selected world.
       if (playImmediately && this.run.stage % 3 !== 0) await this.launch();
       else void this.renderer.loadWorld(this.run.world).catch(() => {});
     }
   }
+
+  /**
+   * Applies one control press, from the keyboard or a pointer.
+   *
+   * Ignored while paused, unready or picture-less. On the title the primary
+   * control starts a quick round; during a landing it steers the ragdoll
+   * instead of the pony.
+   */
   action(action: Action, repeated = false) {
     if (!this.ready || this.graphicsLost || repeated || this.state.paused)
       return;
@@ -468,24 +362,39 @@ export class GameController {
       this.crash.action(action);
       applyCrashFrame(this.state, this.crash.snapshot());
     } else act(this.state, action, repeated);
-    this.drainEvents();
+    drainEvents(this);
     this.publish();
   }
+
+  /** Presses a control, ignoring a pointer already held down. */
   pointerDown(id: string, action: Action) {
     if (this.held.has(id)) return;
     this.held.add(id);
     this.action(action);
   }
+
+  /** Releases one held pointer. */
   pointerUp(id: string) {
     this.held.delete(id);
   }
+
+  /** Forgets every held control, so nothing repeats across a screen change. */
   clearInputs() {
     this.held.clear();
   }
+
+  /** Treats a cancelled gesture as leaving the game, which pauses it. */
   cancelPointer() {
     this.clearInputs();
     this.pause(true);
   }
+
+  /**
+   * Pauses or resumes play, toggling when `paused` is omitted.
+   *
+   * The tutorial and a lost picture hold the pause regardless of the request,
+   * because neither can be played through.
+   */
   pause(paused?: boolean) {
     if (this.screen !== 'game') return;
     this.state.paused =
@@ -497,6 +406,8 @@ export class GameController {
     else void this.audio.unlock();
     this.publish();
   }
+
+  /** Closes the control guide for good and resumes if the tab is visible. */
   dismissTutorial() {
     if (!this.tutorial) return;
     this.tutorial = false;
@@ -504,6 +415,13 @@ export class GameController {
     this.persist();
     this.pause(document.hidden || this.graphicsLost);
   }
+
+  /**
+   * Replays the retained incident from the results screen.
+   *
+   * The lead-in re-fires the effects that were already alive when the window
+   * opens, so the cut starts mid-carnage rather than on a clean stage.
+   */
   replayIncident() {
     if (this.screen !== 'results' || !this.frames.length) return;
     this.state.phase = 'replay';
@@ -523,6 +441,8 @@ export class GameController {
     void this.audio.unlock();
     this.publish();
   }
+
+  /** Cuts the replay short and returns to the results screen. */
   skipReplay() {
     if (this.state.phase === 'replay') {
       this.state.phase = 'results';
@@ -531,360 +451,87 @@ export class GameController {
       this.publish();
     }
   }
+
+  /** A deep copy of the retained incident, safe to store or share. */
   recording(): Recording {
-    const frames = this.frames.map((f) => structuredClone(f));
-    return {
-      contentVersion: this.state.contentVersion,
-      appearance: this.attemptAppearance
-        ? { ...this.attemptAppearance }
-        : {
-            hat: this.renderer.hat,
-            ponyId: this.renderer.ponyId,
-            gentle: this.renderer.gentle,
-            reduced: this.renderer.reduced,
-          },
-      frames,
-      events: structuredClone([
-        ...replayLeadIn(this.recordedEvents, frames, frames[0]?.time ?? 0),
-        ...this.recordedEvents.filter(
-          (e) => e.time !== undefined && e.time >= (frames[0]?.time ?? 0),
-        ),
-      ]),
-      duration: frames.length ? frames.at(-1)!.time - frames[0].time : 0,
-    };
+    return buildRecording(this);
   }
-  private keyDown = (e: KeyboardEvent) => {
-    const target = e.target as HTMLElement;
-    if (
-      target.closest(
-        '[role="dialog"],input,textarea,select,[contenteditable="true"]',
-      )
-    )
-      return;
-    if (e.code === 'Escape' || e.code === 'KeyP') {
-      if (!e.repeat) {
-        this.pause();
-        e.preventDefault();
-      }
-      return;
-    }
-    if (![this.save.primaryKey, this.save.secondaryKey].includes(e.code))
-      return;
-    if (target.closest('button,a') && e.code === 'Space') return;
-    e.preventDefault();
-    if (e.repeat || this.held.has(e.code)) return;
-    this.held.add(e.code);
-    this.action(e.code === this.save.primaryKey ? 'primary' : 'secondary');
-  };
-  private keyUp = (e: KeyboardEvent) => {
+
+  /** Keyboard entry point, retained so it can be unsubscribed on dispose. */
+  keyDown = (e: KeyboardEvent) => handleKeyDown(this, e);
+
+  /** Releases a key so its control can fire again. */
+  keyUp = (e: KeyboardEvent) => {
     this.held.delete(e.code);
   };
-  private blur = () => {
+
+  /** Leaving the window drops held controls and stops the sound. */
+  blur = () => {
     if (this.preparation) this.preparationInterrupted = true;
     this.clearInputs();
     if (this.screen === 'game') this.pause(true);
     else this.audio.pause();
   };
-  private visibility = () => {
+
+  /** A hidden tab is treated exactly as a lost focus. */
+  visibility = () => {
     if (document.hidden) this.blur();
   };
-  private graphicsInterrupted = (event: Event) => {
+
+  /** A lost WebGL context stops play and asks the browser for a restore. */
+  graphicsInterrupted = (event: Event) => {
     event.preventDefault();
     this.graphicsLost = true;
     this.blur();
     this.clock.reset();
     this.publish();
   };
-  private graphicsRestored = () => {
+
+  /** Rebuilds the picture once the browser hands the context back. */
+  graphicsRestored = () => {
     // A microtask can run between native event listeners. Wait until the
     // complete restored-event dispatch finishes before touching Pixi's caches.
-    setTimeout(() => {
-      if (this.disposed) return;
-      try {
-        this.renderer.restoreGraphics();
-        this.graphicsLost = false;
-        this.pausedPictureReady = false;
-        this.last = 0;
-      } catch {
-        this.error =
-          'The picture could not recover. Reload to return to your saved event.';
-      }
-      this.publish();
-    }, 0);
+    setTimeout(() => restorePicture(this), 0);
   };
-  private drainEvents() {
-    const events = [...this.state.events, ...(this.crash?.drain() ?? [])];
-    this.state.events = [];
-    for (const e of events) {
-      const recorded = {
-        ...recordPerkEvent(e, this.state),
-        time: this.recordTime,
-      };
-      if (e.freeze && this.state.reactive && this.state.phase === 'landing')
-        this.state.hitStop = Math.max(this.state.hitStop, e.freeze);
-      this.audio.event(recorded);
-      this.renderer.event(recorded);
-      this.recordedEvents.push(recorded);
-    }
-    if (this.recordedEvents.length > 1500)
-      this.recordedEvents.splice(0, this.recordedEvents.length - 1500);
-    return events.length > 0;
-  }
-  private complete() {
-    if (this.savedRound === this.state.round) return;
-    this.savedRound = this.state.round;
-    // Include the final physics tick even when it falls between replay samples.
-    // Keep its landing pose; the results phase resets phaseTime to zero.
-    const last = this.frames.at(-1);
-    if (last) {
-      this.frames.push({
-        ...this.state,
-        outfit: { hat: this.renderer.hat, ponyId: this.renderer.ponyId },
-        phase: 'landing',
-        phaseTime:
-          last.phaseTime +
-          Math.max(0, this.state.time - (last.sceneTime ?? last.time)),
-        time: this.recordTime,
-        sceneTime: this.state.time,
-        events: [],
-        rings: [...this.state.rings],
-      });
-      if (this.frames.length > 2400) this.frames.shift();
-    }
-    this.newBest = this.state.distance > this.save.best;
-    const next = finishRound(this.save, this.state);
-    this.newHats = next.hats.filter((h) => !this.save.hats.includes(h));
-    this.save = next;
-    if (this.run) {
-      settleAttempt(
-        this.run,
-        {
-          distance: this.state.distance,
-          style: this.state.style,
-          havoc: this.state.havoc,
-          failed: this.state.failed,
-          bossHits: this.state.bossHits,
-          disaster: worldById(this.state.world).disasters[
-            this.state.disaster % 4
-          ],
-        },
-        this.save.unlocked,
-      );
-      if (this.run.status === 'won' && this.run.mode !== 'quick') {
-        this.save.wins++;
-        if (this.run.mode === 'daily') {
-          const key = dailyRecordKey(this.run);
-          if (key)
-            this.save.daily[key] = Math.max(
-              this.save.daily[key] ?? 0,
-              this.run.score,
-            );
-        }
-      }
-    }
-    this.screen = 'results';
-    void saveIncident({
-      id: `incident-${Date.now()}`,
-      name: worldById(this.state.world).disasters[this.state.disaster % 4],
-      distance: this.state.distance,
-      havoc: this.state.havoc,
-      created: Date.now(),
-      recording: this.recording(),
-    });
-    this.persist();
-    this.syncPreferences();
-    this.audio.event({
-      kind: 'record',
-      sound: this.run?.status === 'lost' ? 'lose' : 'win',
-      x: this.state.x,
-      y: 0,
-    });
-  }
+
   exporting = false;
+
+  /** Watches the HUD so the camera can keep the pony clear of it. */
   observeHud(element: Element | null) {
     if (this.hud) this.observer.unobserve(this.hud);
     this.hud = element;
     if (element) this.observer.observe(element);
     this.resizePending = true;
   }
+
+  /** Hands the frame loop to an external driver, such as a capture harness. */
   setExporting(active: boolean) {
     this.exporting = active;
     if (active) this.audio.pause();
     else void this.audio.unlock();
   }
-  private frame = (now: number) => {
-    if (this.disposed) return;
-    if (this.resizePending) {
-      this.resizePending = false;
-      this.pausedPictureReady = false;
-      const canvasTop = this.renderer.canvas.getBoundingClientRect().top;
-      this.renderer.hudInset = Math.max(
-        80,
-        (this.hud?.getBoundingClientRect().bottom ?? canvasTop) -
-          canvasTop +
-          12,
-      );
-      this.renderer.resize(
-        undefined,
-        undefined,
-        this.caption?.getBoundingClientRect().height ?? 0,
-      );
-    }
-    const elapsed = this.last ? (now - this.last) / 1000 : 1 / 60;
-    const dt = Math.min(0.1, elapsed);
-    this.last = now;
-    this.renderer.observeFrame(
-      elapsed,
-      !this.exporting &&
-        !this.graphicsLost &&
-        !this.state.paused &&
-        (this.screen === 'game' || this.state.phase === 'replay'),
-    );
-    if (this.exporting || this.graphicsLost) {
-      this.raf = requestAnimationFrame(this.frame);
-      return;
-    }
-    // Keep the RAF timestamp current for a smooth resume, but leave an
-    // unchanged paused picture on the compositor instead of repainting it.
-    // Layout, preferences, preparation and graphics recovery invalidate it.
-    if (this.state.paused && this.pausedPictureReady) {
-      this.raf = requestAnimationFrame(this.frame);
-      return;
-    }
-    this.fps = this.fps * 0.95 + (1 / Math.max(0.001, dt)) * 0.05;
-    const previous = this.state.phase;
-    if (this.ready && this.state.phase !== 'replay')
-      this.clock.advance(this.state, dt, () => {
-        if (
-          this.state.phase === 'runup' &&
-          this.run?.assisted &&
-          this.state.time - this.lastAssist > 0.15 &&
-          [...this.held].some(
-            (id) => id === this.save.primaryKey || id.includes('primary'),
-          )
-        ) {
-          act(this.state, 'primary');
-          this.lastAssist = this.state.time;
-        }
-        if (this.state.phase === 'landing' && this.state.reactive) {
-          this.crash ??= new CrashWorld(this.state);
-          if (this.state.time > this.previousSimTime) this.crash.step(STEP);
-          applyCrashFrame(this.state, this.crash.snapshot());
-        }
-        this.previousSimTime = this.state.time;
-        this.recordTime += STEP;
-        const beat = this.drainEvents();
-        this.recordTick++;
-        if (
-          (beat || this.recordTick % 4 === 0) &&
-          ['flight', 'landing'].includes(this.state.phase)
-        ) {
-          this.frames.push({
-            ...this.state,
-            outfit: { hat: this.renderer.hat, ponyId: this.renderer.ponyId },
-            time: this.recordTime,
-            sceneTime: this.state.time,
-            events: [],
-            rings: [...this.state.rings],
-          });
-          while (
-            this.frames.length > 1 &&
-            this.frames[1].time < this.recordTime - INCIDENT_WINDOW
-          )
-            this.frames.shift();
-          if (this.frames.length > 2400) this.frames.shift();
-        }
-      });
-    if (this.state.phase !== 'replay') this.drainEvents();
-    if (this.state.phase === 'results' && previous !== 'results')
-      this.complete();
-    let render = this.state;
-    if (this.state.phase === 'replay' && this.frames.length) {
-      if (!this.state.paused) this.replayTime += dt * 0.7;
-      const base = this.frames[0].time,
-        at = base + this.replayTime;
-      render = replayFrame(this.frames, at);
-      while (this.replayEvent < this.recordedEvents.length) {
-        const e = this.recordedEvents[this.replayEvent];
-        if ((e.time ?? 0) > at) break;
-        if ((e.time ?? 0) >= base) {
-          this.audio.event({
-            ...e,
-            id: `replay-${this.replaySession}-${this.replayEvent}`,
-          });
-          this.renderer.event(replayEvent(e, this.frames));
-        }
-        this.replayEvent++;
-      }
-      if (at >= this.frames.at(-1)!.time) this.skipReplay();
-    }
-    this.renderer.draw(render, this.state.paused ? 0 : dt, render.time);
-    this.pausedPictureReady = this.state.paused;
-    this.audio.tick(render);
-    if (now - this.lastPublish > 70 || previous !== this.state.phase) {
-      this.publish();
-      this.lastPublish = now;
-    }
-    this.raf = requestAnimationFrame(this.frame);
-  };
+
+  /** The animation-frame callback, retained so it can be cancelled. */
+  frame = (now: number) => advanceFrame(this, now);
+
+  /** Publishes the current session to the interface. */
   publish() {
-    this.onView({
-      game: { ...this.state, events: [], rings: [...this.state.rings] },
-      save: this.save,
-      run: this.run ? structuredClone(this.run) : null,
-      screen: this.screen,
-      ready: this.ready && !this.graphicsLost,
-      error: this.error,
-      graphicsLost: this.graphicsLost,
-      preparation: this.preparation ? { ...this.preparation } : null,
-      tutorial: this.tutorial,
-      newBest: this.newBest,
-      newHats: this.newHats,
-      fps: Math.round(this.fps),
-    });
+    this.onView(viewState(this));
   }
+
+  /** Flat reading of the live simulation, for the browser suite. */
   snapshot() {
-    return {
-      phase: this.state.phase,
-      screen: this.screen,
-      paused: this.state.paused,
-      x: this.state.x,
-      y: this.state.y,
-      speed: this.state.speed,
-      flaps: this.state.flaps,
-      flips: this.state.flips,
-      distance: this.state.distance,
-      flightDistance: this.state.flightDistance,
-      style: this.state.style,
-      havoc: this.state.havoc,
-      quality: this.state.quality,
-      landing: this.state.landing,
-      failed: this.state.failed,
-      ready: this.ready,
-      jump: jumpTarget(this.state),
-      fps: Math.round(this.fps),
-      audio: this.audio.context?.state ?? 'locked',
-      run: this.run,
-    };
+    return sessionSnapshot(this);
   }
+
+  /** Releases the listeners, the physics world, the audio and the canvas. */
   dispose() {
     this.preparationId++;
     this.disposed = true;
     this.abilityIcons.clear();
     cancelAnimationFrame(this.raf);
     this.observer.disconnect();
-    window.removeEventListener('keydown', this.keyDown);
-    window.removeEventListener('keyup', this.keyUp);
-    window.removeEventListener('blur', this.blur);
-    document.removeEventListener('visibilitychange', this.visibility);
-    this.renderer.canvas.removeEventListener(
-      'webglcontextlost',
-      this.graphicsInterrupted,
-    );
-    this.renderer.canvas.removeEventListener(
-      'webglcontextrestored',
-      this.graphicsRestored,
-    );
+    unbindSession(this, this.renderer.canvas);
     this.crash?.dispose();
     this.audio.dispose();
     this.renderer.dispose();

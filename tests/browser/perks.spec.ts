@@ -127,7 +127,7 @@ test('perk animation is readable, bounded and identical on replay, with reduced 
   const result = await page.evaluate(async () => {
     const simPath = '/lib/game/simulation.ts',
       contentPath = '/lib/game/content.ts',
-      motionPath = '/lib/game/effects/perk-motion.ts';
+      motionPath = '/lib/game/effects/motion/perk-motion.ts';
     const sim = await import(simPath),
       content = await import(contentPath),
       motion = await import(motionPath);

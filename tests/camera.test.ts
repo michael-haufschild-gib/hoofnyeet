@@ -248,3 +248,84 @@ void test('late ejection and possession keep the lens continuous with hats and s
         }
       }
 });
+
+void test('late supporting cartoons fit phones through a smooth entrance without pulling an escaped player back', async () => {
+  const { CrashWorld, initPhysics } = await import('../lib/game/crash');
+  await initPhysics();
+  const s = createGame();
+  s.phase = 'landing';
+  const crash = new CrashWorld(s);
+  try {
+    const frame = crash.snapshot();
+    s.wreck = {
+      ...frame,
+      focusX: 3000,
+      focusY: -42,
+      bodies: [
+        {
+          id: frame.focusId!,
+          part: 'offended-head',
+          x: 3000,
+          y: -42,
+          w: 74,
+          h: 83,
+          angle: 0,
+          tint: 0xffffff,
+          alpha: 1,
+          boss: false,
+        },
+      ],
+      velocityX: 0,
+      velocityY: 0,
+      carnage: { cues: [], attachments: [] },
+    };
+    for (const [width, height] of [
+      [1440, 930],
+      [368, 600],
+      [360, 450],
+      [915, 248],
+    ]) {
+      s.wreck.carnage!.cues = [];
+      let previous = frameGame(s, width, height, null, 1 / 120);
+      s.wreck.carnage!.cues.push({
+        id: 'encore',
+        kind: 'landing',
+        at: 8,
+        stage: 0,
+        x: 3000,
+        y: -70,
+        power: 1,
+        seed: 31,
+        world: 'farm',
+        encore: 1,
+      });
+      for (let tick = 0; tick < 138; tick++) {
+        s.wreck.time = 8 + tick / 120;
+        const next = frameGame(s, width, height, previous, 1 / 120);
+        assert.ok(
+          Math.abs(Math.log(next.zoom / previous.zoom)) <= 1.8 / 120 + 1e-8,
+        );
+        previous = next;
+      }
+      const project = (x: number) =>
+        width / 2 + (x - previous.x) * previous.zoom;
+      assert.ok(project(3000 - 315) > 10, `${width}: left cast cropped`);
+      assert.ok(
+        project(3000 + 315) < width - 10,
+        `${width}: right cast cropped`,
+      );
+      assert.ok(previous.ground < height - 35);
+      assert.ok(previous.subjectTop >= previous.safeTop - 0.01);
+    }
+    s.wreck.focusX = 5000;
+    s.wreck.bodies[0].x = 5000;
+    const escaped = frameGame(s, 368, 600, null, 1 / 120);
+    assert.ok(Math.abs(escaped.x - 5000) < 90);
+    assert.ok(
+      escaped.zoom > 1,
+      'distant scenery does not keep the escaped wreck tiny',
+    );
+  } finally {
+    crash.dispose();
+  }
+});

@@ -1,13 +1,25 @@
-import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
+import {
+  Container,
+  Graphics,
+  Sprite,
+  Text,
+  type Texture,
+  type Renderer,
+} from 'pixi.js';
 import { RINGS, type GameEvent, type GameState } from '../simulation';
-import { propulsionPuff, PUFF_LIFE } from './perk-motion';
-import { ponyPose } from '../pose';
-import { LEG_HIPS } from '../geometry';
+import { propulsionPuff, PUFF_LIFE } from './motion/perk-motion';
+import { ponyPose } from '../art/pose';
+import { LEG_HIPS } from '../art/geometry';
 import { RocketExhaust } from './rocket-exhaust';
 
-const ink = 0x31534b;
-const mint = 0xcef49a;
-const gold = 0xffda6b;
+import {
+  drawGust,
+  drawReactionRing,
+  gold,
+  ink,
+  MAGNETIC_PARTS,
+  posePuff,
+} from './perk-accents';
 
 /** Equipment feedback has no ticker, timers or physics. All motion is sampled
  * from the same recorded simulation clock as the articulated pony. */
@@ -118,51 +130,8 @@ export class PerkEffects {
     this.weather.visible = air && has('tailwind');
     this.label.visible = false;
     this.drawWear(s, reduced ? 0 : time);
-
-    if (this.weather.visible) {
-      const storm = has('beans');
-      this.weather.position.set(
-        x - 137 * readable,
-        y - 12 + (reduced ? 0 : Math.sin(time * 5) * 9),
-      );
-      this.weather.scale.set(readable * (storm ? 1.03 : 0.82));
-      this.weather.rotation = reduced ? 0 : Math.sin(time * 3) * 0.055;
-      const g = this.wind;
-      const count = reduced ? 2 : Math.max(3, Math.ceil(6 * density));
-      for (let i = 0; i < count; i++) {
-        const p = reduced ? 0.42 : (time * 1.4 + i / count) % 1;
-        const start = x + (-108 + p * 133) * readable;
-        const row = y + (i % 2 ? 1 : -1) * (32 + i * 7) * readable;
-        const alpha = reduced ? 0.55 : Math.sin(p * Math.PI) * 0.85;
-        g.moveTo(start - 55 * readable, row)
-          .bezierCurveTo(
-            start - 15,
-            row - 11,
-            start + 25,
-            row + 12,
-            start + 50 * readable,
-            row,
-          )
-          .stroke({ color: ink, width: 5 * readable, alpha: alpha * 0.25 })
-          .moveTo(start - 55 * readable, row)
-          .bezierCurveTo(
-            start - 15,
-            row - 11,
-            start + 25,
-            row + 12,
-            start + 50 * readable,
-            row,
-          )
-          .stroke({
-            color: storm ? mint : 0xf3fff1,
-            width: 2.5 * readable,
-            alpha,
-          });
-        if (!reduced)
-          g.ellipse(start + 30, row + 9, 5, 2).fill({ color: 0xb9dc6e, alpha });
-      }
-    }
-
+    if (this.weather.visible)
+      this.drawWeather(has('beans'), x, y, time, readable, reduced, density);
     this.exhaust.update(
       pony,
       jetpack,
@@ -173,33 +142,65 @@ export class PerkEffects {
     );
     this.flightAccents(s, time, x, y, readable, reduced);
     this.drawPuffs(time, readable, reduced, density);
-
-    // A visible magnetic field connects the wreck to the metal it is pulling.
-    if (s.phase === 'landing' && s.wreck && has('magnet')) {
-      const w = s.wreck;
-      const metal = w.bodies
-        .filter(
-          (b) =>
-            ['cabinet', 'piano', 'helmet', 'drum', 'tnt'].includes(b.part) &&
-            Math.hypot(b.x - w.focusX, b.y - w.focusY) < 630,
-        )
-        .slice(0, reduced ? 1 : 3);
-      for (const b of metal)
-        this.trails
-          .moveTo(w.focusX, w.focusY)
-          .quadraticCurveTo(
-            (w.focusX + b.x) / 2,
-            Math.min(w.focusY, b.y) - 70,
-            b.x,
-            b.y,
-          )
-          .stroke({
-            color: 0xa4ffdc,
-            width: 2.5,
-            alpha: reduced ? 0.45 : 0.45 + Math.sin(time * 12) * 0.2,
-          });
-    }
+    this.drawMagnetField(s, time, reduced, has('magnet'));
     if (!moving && s.phase !== 'landing') this.trails.clear();
+  }
+
+  /** Places the overworked storm cloud beside the pony and blows the gust
+   * streaks past it. `storm` is the beans upgrade, which inflates the cloud
+   * and tints its wind; `density` scales the streak count between 3 and 6. */
+  private drawWeather(
+    storm: boolean,
+    x: number,
+    y: number,
+    time: number,
+    readable: number,
+    reduced: boolean,
+    density: number,
+  ) {
+    this.weather.position.set(
+      x - 137 * readable,
+      y - 12 + (reduced ? 0 : Math.sin(time * 5) * 9),
+    );
+    this.weather.scale.set(readable * (storm ? 1.03 : 0.82));
+    this.weather.rotation = reduced ? 0 : Math.sin(time * 3) * 0.055;
+    const count = reduced ? 2 : Math.max(3, Math.ceil(6 * density));
+    for (let i = 0; i < count; i++)
+      drawGust(this.wind, i, count, x, y, time, readable, reduced, storm);
+  }
+
+  /** A visible magnetic field connects the wreck to the metal it is pulling.
+   * Only the first three heavy parts within 630 world units are tethered, and
+   * nothing is drawn unless the magnet is equipped during a landing. */
+  private drawMagnetField(
+    s: GameState,
+    time: number,
+    reduced: boolean,
+    equipped: boolean,
+  ) {
+    if (!equipped || s.phase !== 'landing' || !s.wreck) return;
+    const w = s.wreck;
+    const metal = w.bodies
+      .filter(
+        (b) =>
+          MAGNETIC_PARTS.includes(b.part) &&
+          Math.hypot(b.x - w.focusX, b.y - w.focusY) < 630,
+      )
+      .slice(0, reduced ? 1 : 3);
+    for (const b of metal)
+      this.trails
+        .moveTo(w.focusX, w.focusY)
+        .quadraticCurveTo(
+          (w.focusX + b.x) / 2,
+          Math.min(w.focusY, b.y) - 70,
+          b.x,
+          b.y,
+        )
+        .stroke({
+          color: 0xa4ffdc,
+          width: 2.5,
+          alpha: reduced ? 0.45 : 0.45 + Math.sin(time * 12) * 0.2,
+        });
   }
 
   private drawPuffs(
@@ -214,30 +215,51 @@ export class PerkEffects {
     );
     let cursor = 0;
     for (const event of this.bursts) {
-      const count = reduced
-        ? 1
-        : Math.ceil((event.propulsion!.power > 1 ? 8 : 6) * density);
-      for (let i = 0; i < count; i++) {
-        const at = propulsionPuff(event, i, time);
-        if (!at || cursor >= this.puffs.length) continue;
-        const p = this.puffs[cursor++];
-        p.visible = true;
-        p.position.set(at.x, at.y);
-        p.width = at.size * readable * (reduced ? 0.75 : 1);
-        p.height = (p.width * p.texture.height) / p.texture.width;
-        p.rotation = reduced ? 0 : at.angle;
-        p.alpha = at.alpha;
-      }
-      const age = time - (event.sceneTime ?? event.time ?? 0);
-      if (!reduced && age >= 0.08 && age < 0.85) {
-        const at = propulsionPuff(event, 0, time)!;
-        this.label.visible = true;
-        this.label.text = event.propulsion!.power > 1 ? 'BRRRAAAP!' : 'PFFT!';
-        this.label.position.set(at.x - 20, at.y - 42 * readable);
-        this.label.rotation = -0.12;
-        this.label.scale.set(readable * (0.85 + Math.min(age * 4, 0.25)));
-        this.label.alpha = Math.min(1, (0.85 - age) * 5);
-      }
+      cursor = this.placePuffs(event, time, readable, reduced, density, cursor);
+      this.puffLabel(event, time, readable, reduced);
+    }
+  }
+
+  /** Poses this burst's puffs starting at pool index `cursor` and returns the
+   * next free index. Puffs past the end of the fixed pool are skipped rather
+   * than allocated, so the burst simply thins out under load. */
+  private placePuffs(
+    event: GameEvent,
+    time: number,
+    readable: number,
+    reduced: boolean,
+    density: number,
+    cursor: number,
+  ) {
+    const count = reduced
+      ? 1
+      : Math.ceil((event.propulsion!.power > 1 ? 8 : 6) * density);
+    for (let i = 0; i < count; i++) {
+      const at = propulsionPuff(event, i, time);
+      if (!at || cursor >= this.puffs.length) continue;
+      posePuff(this.puffs[cursor++], at, readable, reduced);
+    }
+    return cursor;
+  }
+
+  /** Shows the comic caption over a burst between 0.08 s and 0.85 s after it,
+   * never in reduced motion. Reuses the one pooled caption, so a later burst
+   * in the same frame simply takes it over. */
+  private puffLabel(
+    event: GameEvent,
+    time: number,
+    readable: number,
+    reduced: boolean,
+  ) {
+    const age = time - (event.sceneTime ?? event.time ?? 0);
+    if (!reduced && age >= 0.08 && age < 0.85) {
+      const at = propulsionPuff(event, 0, time)!;
+      this.label.visible = true;
+      this.label.text = event.propulsion!.power > 1 ? 'BRRRAAAP!' : 'PFFT!';
+      this.label.position.set(at.x - 20, at.y - 42 * readable);
+      this.label.rotation = -0.12;
+      this.label.scale.set(readable * (0.85 + Math.min(age * 4, 0.25)));
+      this.label.alpha = Math.min(1, (0.85 - age) * 5);
     }
   }
 
@@ -250,48 +272,88 @@ export class PerkEffects {
     reduced: boolean,
   ) {
     if (s.phase !== 'flight') return;
+    if (s.equipment.includes('feather'))
+      this.featherTrail(x, y, time, scale, reduced);
+    if (s.equipment.includes('acrobat') && s.flipActive)
+      this.acrobatArc(s, x, y, scale, reduced);
+    if (s.equipment.includes('honey')) this.honeyThreads(s, x, y);
+    this.reactionStars(s, time, x, y, reduced);
+  }
+
+  /** Four feathers shed behind the pony on a repeating 1/0.48 s drift. */
+  private featherTrail(
+    x: number,
+    y: number,
+    time: number,
+    scale: number,
+    reduced: boolean,
+  ) {
     const g = this.trails;
-    if (s.equipment.includes('feather')) {
-      for (let i = 0; i < (reduced ? 1 : 4); i++) {
-        const p = reduced ? 0.5 : (time * 0.48 + i / 4) % 1;
-        const xx = x - (50 + p * 140) * scale;
-        const yy = y + (Math.sin(p * 6 + i) * 36 + p * 45) * scale;
-        g.moveTo(xx - 13, yy + 9)
-          .quadraticCurveTo(xx - 22, yy - 17, xx + 15, yy - 18)
-          .quadraticCurveTo(xx + 19, yy + 2, xx - 13, yy + 9)
-          .fill({ color: 0xfffbea, alpha: 1 - p * 0.6 })
-          .stroke({ color: ink, width: 1.5, alpha: 0.7 })
-          .moveTo(xx - 18, yy + 14)
-          .lineTo(xx + 10, yy - 14)
-          .stroke({ color: 0xb39c68, width: 1.5 });
-      }
+    for (let i = 0; i < (reduced ? 1 : 4); i++) {
+      const p = reduced ? 0.5 : (time * 0.48 + i / 4) % 1;
+      const xx = x - (50 + p * 140) * scale;
+      const yy = y + (Math.sin(p * 6 + i) * 36 + p * 45) * scale;
+      g.moveTo(xx - 13, yy + 9)
+        .quadraticCurveTo(xx - 22, yy - 17, xx + 15, yy - 18)
+        .quadraticCurveTo(xx + 19, yy + 2, xx - 13, yy + 9)
+        .fill({ color: 0xfffbea, alpha: 1 - p * 0.6 })
+        .stroke({ color: ink, width: 1.5, alpha: 0.7 })
+        .moveTo(xx - 18, yy + 14)
+        .lineTo(xx + 10, yy - 14)
+        .stroke({ color: 0xb39c68, width: 1.5 });
     }
-    if (s.equipment.includes('acrobat') && s.flipActive) {
-      const turn = s.flipProgress * Math.PI * 2;
-      for (let i = 0; i < (reduced ? 1 : 3); i++) {
-        const r = (81 + i * 7) * scale;
-        g.arc(x, y, r, turn - Math.PI * 0.95, turn).stroke({
-          color: [0xffba7c, 0xffe980, 0xa9f2d7][i],
-          width: 5 - i,
-          alpha: 0.85,
-        });
-      }
-      g.star(
-        x + Math.cos(turn) * 84 * scale,
-        y + Math.sin(turn) * 84 * scale,
-        4,
-        12,
-        4,
-      ).fill(gold);
+  }
+
+  /** Three trailing arcs and a lead star that follow the flip's own progress,
+   * so the streak always ends where the pony currently points. */
+  private acrobatArc(
+    s: GameState,
+    x: number,
+    y: number,
+    scale: number,
+    reduced: boolean,
+  ) {
+    const g = this.trails;
+    const turn = s.flipProgress * Math.PI * 2;
+    for (let i = 0; i < (reduced ? 1 : 3); i++) {
+      const r = (81 + i * 7) * scale;
+      g.arc(x, y, r, turn - Math.PI * 0.95, turn).stroke({
+        color: [0xffba7c, 0xffe980, 0xa9f2d7][i],
+        width: 5 - i,
+        alpha: 0.85,
+      });
     }
-    if (s.equipment.includes('honey')) {
-      for (const ring of RINGS.filter((_, i) => !s.rings.includes(i))) {
-        if (Math.hypot(s.x - ring.x, s.y - ring.y) > 220) continue;
-        g.moveTo(x + 20, y + 10)
-          .quadraticCurveTo((x + ring.x) / 2, y - 70, ring.x, ring.y)
-          .stroke({ color: gold, width: 4, alpha: 0.75 });
-      }
+    g.star(
+      x + Math.cos(turn) * 84 * scale,
+      y + Math.sin(turn) * 84 * scale,
+      4,
+      12,
+      4,
+    ).fill(gold);
+  }
+
+  /** Sticky threads reaching toward every uncollected ring within 220 world
+   * units, which is how the honey upgrade advertises its pull. */
+  private honeyThreads(s: GameState, x: number, y: number) {
+    const g = this.trails;
+    for (const ring of RINGS.filter((_, i) => !s.rings.includes(i))) {
+      if (Math.hypot(s.x - ring.x, s.y - ring.y) > 220) continue;
+      g.moveTo(x + 20, y + 10)
+        .quadraticCurveTo((x + ring.x) / 2, y - 70, ring.x, ring.y)
+        .stroke({ color: gold, width: 4, alpha: 0.75 });
     }
+  }
+
+  /** Star bursts for the recorded ring and flip reactions of the last 0.8 s.
+   * A reaction only pays out while its matching upgrade is equipped, and
+   * reduced motion suppresses the burst without dropping the recording. */
+  private reactionStars(
+    s: GameState,
+    time: number,
+    x: number,
+    y: number,
+    reduced: boolean,
+  ) {
     this.reactions = this.reactions.filter(
       (e) => time - (e.sceneTime ?? e.time ?? 0) < 0.8,
     );
@@ -305,20 +367,20 @@ export class PerkEffects {
           : s.equipment.includes('acrobat'))
       )
         continue;
-      for (let i = 0; i < 8; i++) {
-        const a = (i * Math.PI) / 4;
-        g.star(
-          x + Math.cos(a) * (70 + age * 80),
-          y + Math.sin(a) * (70 + age * 80),
-          4,
-          8,
-          3,
-        ).fill({ color: gold, alpha: 1 - age / 0.8 });
-      }
+      drawReactionRing(this.trails, x, y, age);
     }
   }
 
   private drawWear(s: GameState, time: number) {
+    this.drawHarness(s, time);
+    this.drawGear(s, time);
+    this.drawTrinkets(s, time);
+  }
+
+  /** Kit strapped to the barrel and rump: the bean tin, the tail windsock and
+   * the ballast brick. `time` is the recorded clock in seconds, already frozen
+   * to 0 by the caller under reduced motion. */
+  private drawHarness(s: GameState, time: number) {
     const has = (id: string) => s.equipment.includes(id);
     const g = this.wear;
     if (has('beans')) {
@@ -355,6 +417,13 @@ export class PerkEffects {
         .circle(-10, 21, 2)
         .circle(14, 21, 2)
         .fill(0xe2ece0);
+  }
+
+  /** Kit worn on the legs and back: bounce bands, hoof spikes, the honey pot
+   * and the ghostly halo. The spikes track the articulated hind hooves. */
+  private drawGear(s: GameState, time: number) {
+    const has = (id: string) => s.equipment.includes(id);
+    const g = this.wear;
     if (has('rubber'))
       for (let i = 0; i < 3; i++)
         g.ellipse(-5, 17 + i * 5, 33, 8).stroke({
@@ -382,6 +451,13 @@ export class PerkEffects {
         .stroke({ color: 0xffe895, width: 4, cap: 'round' });
     if (has('ghostly'))
       g.ellipse(8, -67, 24, 6).stroke({ color: 0xa4ffe5, width: 3 });
+  }
+
+  /** The small charms pinned over the body: bumper star, confetti scraps, the
+   * ticking aftershock dial and the loose horseshoes. */
+  private drawTrinkets(s: GameState, time: number) {
+    const has = (id: string) => s.equipment.includes(id);
+    const g = this.wear;
     if (has('pinball'))
       g.star(0, -4, 5, 18, 9).fill(gold).stroke({ color: ink, width: 2 });
     if (has('confetti'))
@@ -415,6 +491,10 @@ export class PerkEffects {
     this.trails.clear();
     this.exhaust.reset();
     this.wear.clear();
+  }
+
+  prepare(renderer: Renderer, force = false) {
+    this.exhaust.prepare(renderer, force);
   }
 
   dispose() {

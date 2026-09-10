@@ -4,9 +4,57 @@ import {
   MUSIC_AUDIO,
   soundPriority,
   type AudioId,
-} from './audio-assets';
+} from './catalogue/audio-assets';
 import type { GameEvent, GameState } from './simulation';
 import { worldById, type WorldId } from './content';
+
+/** A playing effect voice and the priority that decides what it may evict. */
+type Voice = { priority: number; gain: GainNode };
+
+/**
+ * The quietest voice in `voices` ranked below `floor`, or undefined when every
+ * voice already outranks it. Callers use this to decide whether a new sound is
+ * worth stealing a slot from one that is still playing.
+ */
+function lowestVoice(
+  voices: Map<AudioBufferSourceNode, Voice>,
+  floor: number,
+): AudioBufferSourceNode | undefined {
+  let victim: AudioBufferSourceNode | undefined,
+    lowest = floor;
+  for (const [voice, meta] of voices) {
+    if (meta.priority < lowest) {
+      victim = voice;
+      lowest = meta.priority;
+    }
+  }
+  return victim;
+}
+
+/** Playback gain for one bundled event sound, on the 0-1 effect scale. */
+function eventVolume(e: GameEvent): number {
+  if (e.kind === 'tap') return 0.22;
+  return e.value && e.value < 1 ? e.value : 1;
+}
+
+/**
+ * Dips the music bed for an impact and lets it climb back over the following
+ * half second. Scheduled on the ducking node alone so the player's music mute
+ * is never overwritten, and any earlier ramp is cancelled first.
+ */
+function duckMusic(duck: GainNode, c: AudioContext) {
+  duck.gain.cancelScheduledValues(c.currentTime);
+  duck.gain.setTargetAtTime(0.08 / 0.28, c.currentTime, 0.02);
+  duck.gain.setTargetAtTime(1, c.currentTime + 0.4, 0.2);
+}
+
+/**
+ * The game's whole audio stage: one lazily created AudioContext behind a
+ * compressor and limiter, a music bus that can be ducked independently of the
+ * player's mute, an effect bus capped at ten concurrent voices, and a cache of
+ * decoded buffers. Every method is safe to call before `unlock` has run or
+ * after `dispose`; playback is simply skipped rather than throwing.
+ */
 export class HorseAudio {
   context: AudioContext | null = null;
   private musicEnabled = true;
@@ -135,14 +183,7 @@ export class HorseAudio {
     }
     const priority = soundPriority(id);
     if (this.voices.size >= 10) {
-      let victim: AudioBufferSourceNode | undefined,
-        lowest = priority;
-      for (const [voice, meta] of this.voices) {
-        if (meta.priority < lowest) {
-          victim = voice;
-          lowest = meta.priority;
-        }
-      }
+      const victim = lowestVoice(this.voices, priority);
       if (!victim) return;
       victim.stop();
       victim.disconnect();
@@ -182,30 +223,33 @@ export class HorseAudio {
       g.disconnect();
     };
   }
-  event(e: GameEvent) {
-    if (e.id) {
-      if (this.played.has(e.id)) return;
-      this.played.add(e.id);
-      if (this.played.size > 500)
-        this.played.delete(this.played.values().next().value!);
-    }
+  /**
+   * Records that an identified event has been heard, returning false when it
+   * already had been. The memory is bounded at 500 ids, oldest discarded first.
+   */
+  private claimEvent(id: string) {
+    if (this.played.has(id)) return false;
+    this.played.add(id);
+    if (this.played.size > 500)
+      this.played.delete(this.played.values().next().value!);
+    return true;
+  }
+  /** Plays whatever sounds the event carries, at its own mix level. */
+  private eventSounds(e: GameEvent) {
     if (e.propulsion) {
       // The bundled comic squish becomes a low raspberry on the same flap beat.
       this.sample('squish', 0.85, e.propulsion.power > 1 ? 0.58 : 0.76);
       this.sample('flap', 0.35);
-    } else {
-      for (const sound of eventAudio(e))
-        this.sample(
-          sound,
-          e.kind === 'tap' ? 0.22 : e.value && e.value < 1 ? e.value : 1,
-        );
+      return;
     }
-    if (this.duckGain && ['crunch', 'land'].includes(e.kind)) {
-      const c = this.context!;
-      this.duckGain.gain.cancelScheduledValues(c.currentTime);
-      this.duckGain.gain.setTargetAtTime(0.08 / 0.28, c.currentTime, 0.02);
-      this.duckGain.gain.setTargetAtTime(1, c.currentTime + 0.4, 0.2);
-    }
+    for (const sound of eventAudio(e)) this.sample(sound, eventVolume(e));
+  }
+  event(e: GameEvent) {
+    if (e.id && !this.claimEvent(e.id)) return;
+    this.eventSounds(e);
+    const duck = this.duckGain;
+    if (duck && ['crunch', 'land'].includes(e.kind))
+      duckMusic(duck, this.context!);
   }
   private async changeMusic(id: AudioId) {
     if (id === this.musicId) return;

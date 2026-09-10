@@ -1,7 +1,7 @@
 // Adapted with user authorization from Slot pixi-runtime kapowBurstFilter.ts.
 // Same ray/halftone shader; standalone transparent effect, manual event clock.
 import { Filter } from 'pixi.js';
-import { FILTER_VERTEX } from './filter-vertex';
+import { FILTER_VERTEX } from './shaders/filter-vertex';
 const fragment = `
 in vec2 vTextureCoord;
 in vec2 vFilterCoord;
@@ -52,6 +52,12 @@ void main() {
     finalColor = vec4(color * alpha, alpha);
 }
 `;
+/**
+ * A transparent impact flash: a ray starburst inside a halftone ring, painted
+ * on an empty node rather than over the scene. The caller drives `uProgress`
+ * 0..1 across the hit — it overshoots full size before settling, then fades
+ * from 0.72 — with `uIntensity`, `uOpacity` and `uPunch` as 0..1 weights.
+ */
 export function comicBurst() {
   return Filter.from({
     gl: { vertex: FILTER_VERTEX, fragment },

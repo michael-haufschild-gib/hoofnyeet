@@ -5,8 +5,8 @@ import {
   combustionCues,
   COMBUSTION_LIFE,
   COMBUSTION_CAP,
-} from '../lib/game/effects/combustion-motion';
-import type { CarnageCue } from '../lib/game/escalation';
+} from '../lib/game/effects/motion/combustion-motion';
+import type { CarnageCue } from '../lib/game/catalogue/escalation';
 const cue: CarnageCue = {
   id: 'ignition',
   kind: 'ignite',

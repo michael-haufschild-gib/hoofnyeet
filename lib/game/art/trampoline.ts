@@ -1,0 +1,237 @@
+import type { Graphics } from 'pixi.js';
+import {
+  TRACK,
+  trampolineDip,
+  jumpTarget,
+  type GameState,
+} from '../simulation';
+
+const HALF_BED = 88;
+const BED_DEPTH = 13;
+const SPRING_FOOT = -4;
+
+/**
+ * The bed's current shape in world units: `load` is where the weight sits
+ * relative to the trampoline centre (0 unless the pony is compressing it),
+ * `dip` is how far the bed has sunk below `TRACK.surface`, and `top(x)` samples
+ * the sagging surface at an offset from the centre, smoothstepped between the
+ * rim and the loaded point. `springFoot` is the y the springs anchor to and
+ * `depth` the painted thickness of the bed, both constant.
+ */
+export function trampolineBed(s: Pick<GameState, 'phase' | 'phaseTime' | 'x'>) {
+  const load =
+    s.phase === 'compression'
+      ? Math.max(-78, Math.min(78, s.x - TRACK.trampoline))
+      : 0;
+  const dip = trampolineDip(s);
+  return {
+    load,
+    dip,
+    top(x: number) {
+      const t =
+        x < load
+          ? (x + HALF_BED) / (load + HALF_BED)
+          : (HALF_BED - x) / (HALF_BED - load);
+      const u = Math.max(0, Math.min(1, t));
+      return TRACK.surface + dip * u * u * (3 - 2 * u);
+    },
+    springFoot: SPRING_FOOT,
+    depth: BED_DEPTH,
+  };
+}
+
+/** The sagging bed the paint has to follow, as the simulation reports it. */
+type TrampolineBed = ReturnType<typeof trampolineBed>;
+
+/** The window where a jump counts, plus chevrons leading the pony into it. */
+function drawTakeoffLane(
+  g: Graphics,
+  cue: ReturnType<typeof jumpTarget>,
+  accent: number,
+) {
+  // The actual take-off window moves with approach speed. Its ground paint
+  // and arrow use the same bounds as the input cue, not a guessed distance.
+  g.roundRect(cue.start, 4, cue.end - cue.start, 22, 8)
+    .fill({ color: accent, alpha: 0.9 })
+    .stroke({ color: 0x2d5546, width: 3 });
+  for (let i = 0; i < 4; i++) {
+    const x = cue.start - 34 - i * 40;
+    g.poly([x - 9, 6, x, 15, x - 9, 24, x - 2, 24, x + 7, 15, x - 2, 6]).fill({
+      color: 0xfff4c5,
+      alpha: 0.85 - i * 0.14,
+    });
+  }
+}
+
+/** The bobbing marker over the cue, ringed once the jump would actually land. */
+function drawJumpArrow(
+  g: Graphics,
+  cue: ReturnType<typeof jumpTarget>,
+  accent: number,
+  time: number,
+  reduced: boolean,
+  green: boolean,
+) {
+  const y = -187 + (reduced ? 0 : Math.sin(time * 5) * 5);
+  const x = cue.center;
+  g.poly([
+    x - 10,
+    y,
+    x + 10,
+    y,
+    x + 10,
+    y + 24,
+    x + 24,
+    y + 24,
+    x,
+    y + 49,
+    x - 24,
+    y + 24,
+    x - 10,
+    y + 24,
+  ])
+    .fill(accent)
+    .stroke({ color: 0x254b3d, width: 4, join: 'round' });
+  if (green)
+    g.ellipse(x, 14, 67, 17).stroke({
+      color: 0xedffcd,
+      width: 3,
+      alpha: 0.85,
+    });
+}
+
+/** A distinct sporting station: tall striped posts, pennants and a lit rim. */
+function drawPennantPosts(
+  g: Graphics,
+  center: number,
+  accent: number,
+  time: number,
+  reduced: boolean,
+) {
+  for (const side of [-1, 1]) {
+    const x = center + side * 113;
+    g.roundRect(x - 4, -125, 8, 123, 3).fill(0x294c3f);
+    g.roundRect(x - 2, -122, 4, 116, 2).fill(0xffe7a0);
+    for (let stripe = 0; stripe < 5; stripe++)
+      g.rect(x - 3, -111 + stripe * 20, 6, 9).fill(0xd46b43);
+    const flutter = reduced ? 0 : Math.sin(time * 4 + side) * 5;
+    g.poly([
+      x,
+      -127,
+      x + side * 40,
+      -118 + flutter,
+      x + side * 33,
+      -96 + flutter,
+      x,
+      -106,
+    ])
+      .fill(accent)
+      .stroke({ color: 0x294c3f, width: 2 });
+    g.circle(x, -128, 6).fill(0xffe589).stroke({ color: 0x294c3f, width: 2 });
+  }
+}
+
+/** Ground shadow, the splayed legs and the rail the springs hook onto. */
+function drawFrame(g: Graphics, center: number) {
+  g.ellipse(center, 2, 113, 7).fill({ color: 0x213e35, alpha: 0.2 });
+  for (const side of [-1, 1]) {
+    g.moveTo(center + side * 84, TRACK.surface + 8)
+      .lineTo(center + side * 98, -5)
+      .stroke({ color: 0x31483c, width: 13, cap: 'round' });
+    g.moveTo(center + side * 84, TRACK.surface + 8)
+      .lineTo(center + side * 98, -5)
+      .stroke({ color: 0xe4a840, width: 8, cap: 'round' });
+    g.roundRect(center + side * 98 - 14, -8, 28, 8, 4).fill(0x354e40);
+    g.roundRect(center + side * 84 - 13, TRACK.surface - 3, 26, 16, 6)
+      .fill(0x34493d)
+      .roundRect(center + side * 84 - 11, TRACK.surface - 1, 22, 12, 5)
+      .fill(0xf8cf54);
+  }
+  g.moveTo(center - 98, SPRING_FOOT)
+    .lineTo(center + 98, SPRING_FOOT)
+    .stroke({ color: 0x665a3c, width: 4 });
+}
+
+/** Sideways throw of one coil; the last returns to centre so the spring lands flush. */
+function coilOffset(coil: number) {
+  return coil === 6 ? 0 : coil % 2 ? 3 : -3;
+}
+
+/** Nine coiled springs, each stretched from the rail to the bed above it. */
+function drawSprings(g: Graphics, center: number, bed: TrampolineBed) {
+  for (let i = 0; i < 9; i++) {
+    const x = -72 + i * 18;
+    const top = bed.top(x) + BED_DEPTH;
+    const length = Math.max(0, SPRING_FOOT - top);
+    g.moveTo(center + x, top);
+    for (let coil = 1; coil <= 6; coil++)
+      g.lineTo(center + x + coilOffset(coil), top + (length * coil) / 6);
+    g.stroke({ color: 0x645a42, width: 3, cap: 'round', join: 'round' });
+  }
+}
+
+/** Traces the bed's centre line, sagging toward wherever the weight sits. */
+function bedPath(
+  g: Graphics,
+  center: number,
+  bed: TrampolineBed,
+  offset: number,
+) {
+  const y = TRACK.surface + BED_DEPTH / 2 + offset;
+  g.moveTo(center - HALF_BED, y)
+    .bezierCurveTo(
+      center - HALF_BED + (bed.load + HALF_BED) / 3,
+      y,
+      center - HALF_BED + ((bed.load + HALF_BED) * 2) / 3,
+      y + bed.dip,
+      center + bed.load,
+      y + bed.dip,
+    )
+    .bezierCurveTo(
+      center + bed.load + (HALF_BED - bed.load) / 3,
+      y + bed.dip,
+      center + bed.load + ((HALF_BED - bed.load) * 2) / 3,
+      y,
+      center + HALF_BED,
+      y,
+    );
+}
+
+/** Rim, shell and face stroked over one another, then a highlight above them. */
+function drawBed(
+  g: Graphics,
+  center: number,
+  bed: TrampolineBed,
+  accent: number,
+) {
+  bedPath(g, center, bed, 0);
+  g.stroke({ color: accent, width: BED_DEPTH + 9, cap: 'round' });
+  bedPath(g, center, bed, 0);
+  g.stroke({ color: 0x244337, width: BED_DEPTH, cap: 'round' });
+  bedPath(g, center, bed, 0);
+  g.stroke({ color: 0x408573, width: 8, cap: 'round' });
+  bedPath(g, center, bed, -3);
+  g.stroke({ color: 0x9ed4ab, width: 2, alpha: 0.8, cap: 'round' });
+}
+
+/** Padded rim, fixed feet and actual coiled springs share the simulation's bed. */
+export function drawTrampoline(g: Graphics, s: GameState, reduced = false) {
+  const bed = trampolineBed(s);
+  const center = TRACK.trampoline;
+  const cue = jumpTarget(s),
+    time = s.sceneTime ?? s.time;
+  const active = ['countdown', 'runup', 'approach', 'compression'].includes(
+    s.phase,
+  );
+  const green = s.phase === 'runup' && cue.ready;
+  const accent = green ? 0x78efae : 0xffd54f;
+  if (active) {
+    drawTakeoffLane(g, cue, accent);
+    if (s.phase === 'runup')
+      drawJumpArrow(g, cue, accent, time, reduced, green);
+  }
+  drawPennantPosts(g, center, accent, time, reduced);
+  drawFrame(g, center);
+  drawSprings(g, center, bed);
+  drawBed(g, center, bed, accent);
+}

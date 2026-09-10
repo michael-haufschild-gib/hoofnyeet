@@ -1,11 +1,11 @@
 import { Container, Filter } from 'pixi.js';
 import type { GameEvent, GameState } from '../simulation';
-import { FILTER_VERTEX } from './filter-vertex';
+import { FILTER_VERTEX } from './shaders/filter-vertex';
 import {
   eventSceneTime,
   pressureWave,
   type PressureWave,
-} from './impact-motion';
+} from './motion/impact-motion';
 
 // Wave falloff and polar twist adapted with authorization from Slot's
 // winShockwaveFilter / featurePortalVortexFilter. This pass refracts the game
@@ -51,6 +51,75 @@ void main() {
 }
 `;
 
+/**
+ * Writes up to three live waves into the filter's vec4 slots, in screen pixels,
+ * clearing any slot with no wave. Returns true when at least one slot painted.
+ */
+function writeWaves(
+  waves: PressureWave[],
+  slots: Float32Array[],
+  world: Container,
+  time: number,
+): boolean {
+  let active = false;
+  for (let i = 0; i < slots.length; i++) {
+    const wave = waves[i] && pressureWave(waves[i], time);
+    const slot = slots[i];
+    slot.fill(0);
+    if (!wave) continue;
+    const center = world.toGlobal(wave);
+    slot.set([center.x, center.y, wave.radius * world.scale.x, wave.power]);
+    active = true;
+  }
+  return active;
+}
+
+/**
+ * Signed twist in radians at `age` seconds into a displacement ability. The
+ * black hole winds in for its first second then unwinds; the ghost gives a
+ * single softer swirl across the whole 1.3 s window.
+ */
+function vortexTwist(ability: GameState['ability'], age: number): number {
+  if (ability === 'blackhole') {
+    return age < 1 ? Math.sin(age * Math.PI) : -(1.3 - age) * 2;
+  }
+  return Math.sin((age / 1.3) * Math.PI) * 0.45;
+}
+
+/**
+ * Writes the ability vortex into its vec4 slot, clearing it first. Returns true
+ * only while a displacement ability is inside its 1.3 s window.
+ */
+function writeVortex(
+  core: Float32Array,
+  s: GameState,
+  world: Container,
+): boolean {
+  core.fill(0);
+  const w = s.wreck;
+  if (!w || w.abilityReady || !['blackhole', 'ghost'].includes(s.ability)) {
+    return false;
+  }
+  const age = w.abilityAge ?? 10;
+  if (age >= 0 && age < 1.3) {
+    const center = world.toGlobal({ x: w.focusX, y: w.focusY });
+    core.set([
+      center.x,
+      center.y,
+      210 * world.scale.x,
+      vortexTwist(s.ability, age),
+    ]);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * A full-screen refraction pass over the game canvas: up to three bounded
+ * contact waves plus one ability vortex. Enabled only while something is
+ * painting and the renderer still has the budget for an extra pass; the UI
+ * lives outside the canvas and is never distorted.
+ */
 export class ImpactLens {
   readonly filter = Filter.from({
     gl: { vertex: FILTER_VERTEX, fragment },
@@ -110,39 +179,11 @@ export class ImpactLens {
     this.waves = this.waves.filter((w) => time < w.born + w.life);
     const u = this.filter.resources.lens.uniforms;
     const slots = [u.uWave0, u.uWave1, u.uWave2] as Float32Array[];
-    let active = false;
-    for (let i = 0; i < slots.length; i++) {
-      const wave = this.waves[i] && pressureWave(this.waves[i], time);
-      const slot = slots[i];
-      slot.fill(0);
-      if (!wave) continue;
-      const center = world.toGlobal(wave);
-      slot.set([center.x, center.y, wave.radius * world.scale.x, wave.power]);
-      active = true;
-    }
-    const core = u.uVortex as Float32Array;
-    core.fill(0);
-    const w = s.wreck;
-    if (w && !w.abilityReady && ['blackhole', 'ghost'].includes(s.ability)) {
-      const age = w.abilityAge ?? 10;
-      if (age >= 0 && age < 1.3) {
-        const center = world.toGlobal({ x: w.focusX, y: w.focusY });
-        core.set([
-          center.x,
-          center.y,
-          210 * world.scale.x,
-          s.ability === 'blackhole'
-            ? age < 1
-              ? Math.sin(age * Math.PI)
-              : -(1.3 - age) * 2
-            : Math.sin((age / 1.3) * Math.PI) * 0.45,
-        ]);
-        active = true;
-      }
-    }
+    const waves = writeWaves(this.waves, slots, world, time);
+    const vortex = writeVortex(u.uVortex as Float32Array, s, world);
     u.uTime = time;
     // Drop the extra framebuffer pass before reducing gameplay resolution.
-    this.filter.enabled = active && !reduced && density > 0.99;
+    this.filter.enabled = (waves || vortex) && !reduced && density > 0.99;
   }
 
   reset() {

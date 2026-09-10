@@ -208,7 +208,11 @@ void test('magnetic debris cannot become a perpetual lift engine after the final
           break;
         }
       }
-      assert.ok(done, `dense magnet scenario never settled, offset ${offset}`);
+      assert.equal(
+        done,
+        true,
+        `dense magnet scenario never settled, offset ${offset}`,
+      );
     } finally {
       c.dispose();
     }

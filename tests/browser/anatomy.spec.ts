@@ -15,8 +15,8 @@ test('contact-bound organ characters retain their sockets, freeze and replay acr
   await page.waitForFunction(() => window.__hoof?.ready);
   const proof = await page.evaluate(async () => {
     const simPath = '/lib/game/simulation.ts',
-      motionPath = '/lib/game/effects/anatomy-motion.ts',
-      escalationPath = '/lib/game/escalation.ts';
+      motionPath = '/lib/game/effects/motion/anatomy-motion.ts',
+      escalationPath = '/lib/game/catalogue/escalation.ts';
     const { createGame } = await import(simPath),
       { anatomyAntic } = await import(motionPath),
       { noise } = await import(escalationPath);

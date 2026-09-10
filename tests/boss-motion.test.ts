@@ -5,10 +5,10 @@ import {
   bossEmission,
   bossShow,
   bossSocket,
-} from '../lib/game/effects/boss-motion';
-import { bossPose } from '../lib/game/machinery';
+} from '../lib/game/effects/motion/boss-motion';
+import { bossPose } from '../lib/game/catalogue/machinery';
 import type { BodyPose } from '../lib/game/crash';
-import type { CarnageCue } from '../lib/game/escalation';
+import type { CarnageCue } from '../lib/game/catalogue/escalation';
 
 const body: BodyPose = {
   id: 1,

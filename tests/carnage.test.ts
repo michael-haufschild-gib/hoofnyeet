@@ -13,7 +13,7 @@ import {
   CRASH_DURATION,
   queueGrabAction,
   type GrabState,
-} from '../lib/game/escalation';
+} from '../lib/game/catalogue/escalation';
 import { CONTENT_VERSION, WORLDS, modifiers } from '../lib/game/content';
 import { defaultSave, readSave } from '../lib/game/storage';
 import { newRun, beginAttempt } from '../lib/game/run';
@@ -75,6 +75,12 @@ void test('all eight additive finales preserve originals, finish all five beats 
         cues.map((c) => c.stage),
         [0, 1, 2, 3, 4],
       );
+      assert.equal(
+        cues[0].encore,
+        1,
+        'new incidents record the supporting cartoon once',
+      );
+      assert.equal(cues.filter((c) => c.encore === 1).length, 1);
       for (const [i, at] of [8, 9.1, 10.4, 11.8, 12.9].entries())
         assert.ok(Math.abs(cues[i].at - at) <= STEP + 1e-8);
       assert.equal(frame.carnage!.grab, undefined);
@@ -180,7 +186,11 @@ void test('real-contact grabs reserve input and execute kicks and ability once a
     c.dispose();
     if (captured) break;
   }
-  assert.ok(captured, 'fixture must exercise an actual Rapier machine contact');
+  assert.equal(
+    captured,
+    true,
+    'fixture must exercise an actual Rapier machine contact',
+  );
 });
 
 void test('grab reservations are bounded, preserve action order, and cannot invent resources', () => {
@@ -335,7 +345,7 @@ void test('landing retains replay cues, freezes during pause, and waits for phys
   c.dispose();
 });
 
-void test('v4 progress and daily records survive the v5 content migration', () => {
+void test('v4 progress and daily records survive the current content migration', () => {
   const run = newRun('daily', 42, false, '2026-09-08');
   beginAttempt(run);
   const source = {
@@ -346,8 +356,7 @@ void test('v4 progress and daily records survive the v5 content migration', () =
     daily: { 'v4:2026-09-08': 5000, 'v5:2026-09-08': 6000 },
   };
   const migrated = readSave({ getItem: () => JSON.stringify(source) });
-  assert.equal(CONTENT_VERSION, 5);
-  assert.equal(migrated.run?.contentVersion, 5);
+  assert.equal(migrated.run?.contentVersion, CONTENT_VERSION);
   assert.equal(migrated.run?.status, 'briefing');
   assert.equal(migrated.run?.mode, 'tour');
   assert.equal(migrated.run?.seed, run.seed);

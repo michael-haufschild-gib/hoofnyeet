@@ -129,7 +129,16 @@ test('accessories follow moving and severed heads and recorded outfits render id
     };
     const rows = [],
       captures = [];
-    for (const hat of ['helmet', 'party', 'crown', 'space'] as Hat[]) {
+    for (const hat of [
+      'helmet',
+      'party',
+      'crown',
+      'space',
+      'brain',
+      'disco',
+      'sausage',
+    ] as Hat[]) {
+      await r.prepareHat(hat);
       r.hat = hat;
       for (const phase of ['runup', 'compression', 'flight'] as const) {
         const s = sim.createGame();
@@ -226,7 +235,7 @@ test('hat rims sit on each illustrated skull and the visor leaves the eyes and m
   await page.goto('/');
   await page.waitForFunction(() => window.__hoof?.ready);
   const report = await page.evaluate(async () => {
-    const path = '/lib/game/headwear.ts';
+    const path = '/lib/game/art/headwear.ts';
     const { Headwear } = await import(path);
     const c = window.__hoof;
     c.setExporting(true);
@@ -251,7 +260,15 @@ test('hat rims sit on each illustrated skull and the visor leaves the eyes and m
     const rows = [],
       captures = [];
     for (const part of ['head', 'surprisedHead', 'offended-head'] as const) {
-      for (const hat of ['party', 'crown', 'space'] as const) {
+      for (const hat of [
+        'party',
+        'crown',
+        'space',
+        'brain',
+        'disco',
+        'sausage',
+      ] as const) {
+        await r.prepareHat(hat);
         const target = new ContainerClass();
         const head = new SpriteClass({
           texture: scene.textures[part],
@@ -265,7 +282,14 @@ test('hat rims sit on each illustrated skull and the visor leaves the eyes and m
         const p = wear.view.children.find(
           (p: Sprite) => p.label === hat,
         ) as Sprite;
-        const brim = hat === 'party' ? [0.43, 0.81] : [0.46, 0.845];
+        const brim = {
+          party: [0.43, 0.81],
+          crown: [0.46, 0.845],
+          space: [0.5, 0.5],
+          brain: [0.55, 0.94],
+          disco: [0.49, 0.94],
+          sausage: [0.53, 0.9],
+        }[hat];
         const contact = head.toLocal(
           p.toGlobal({
             x: (brim[0] - p.anchor.x) * p.texture.width,
@@ -325,6 +349,7 @@ test('hat rims sit on each illustrated skull and the visor leaves the eyes and m
           name: `${part}-${hat}`,
           url: canvas.toDataURL?.() ?? '',
         });
+        wear.dispose();
         target.destroy({ children: true });
       }
     }

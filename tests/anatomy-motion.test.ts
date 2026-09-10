@@ -6,9 +6,9 @@ import {
   anatomyIncident,
   anatomyAntic,
   ANATOMY_ANTIC_LIFE,
-} from '../lib/game/effects/anatomy-motion';
+} from '../lib/game/effects/motion/anatomy-motion';
 import type { BodyPose } from '../lib/game/crash';
-import type { CarnageCue } from '../lib/game/escalation';
+import type { CarnageCue } from '../lib/game/catalogue/escalation';
 
 const body: BodyPose = {
   id: 1,

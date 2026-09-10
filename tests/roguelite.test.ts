@@ -81,8 +81,8 @@ void test('daily equipment choices are reproducible and independent of local unl
   assert.deepEqual(offers(a, []), offers(b, ids));
   assert.notDeepEqual(offers(newRun('daily', 125), ids), offers(a, ids));
 });
-void test('all eight synergies activate only for their actual equipment pair', () => {
-  assert.equal(synergies(ids).length, 8);
+void test('all twelve synergies activate only for their actual equipment pair', () => {
+  assert.equal(synergies(ids).length, 12);
   assert.equal(synergies([]).length, 0);
   assert.equal(synergies(['magnet', 'blackhole'])[0].id, 'junk');
   assert.equal(modifiers(['wings', 'feather']).maxFlaps, 6);
@@ -117,7 +117,7 @@ void test('save migration retains v1 records and protects against invalid run da
     'briefing',
   );
 });
-void test('challenge descriptors reject untrusted versions and seeds', () => {
+void test('a challenge link round-trips its own fields and rejects an unknown version, seed or pool', () => {
   const run = newRun('daily', 123, true);
   run.score = 1200;
   const parsed = parseChallenge(
@@ -128,6 +128,7 @@ void test('challenge descriptors reject untrusted versions and seeds', () => {
     assisted: true,
     target: 1200,
     mode: 'daily',
+    campaign: 'classic',
     rules: 'standard',
     date: undefined,
     pool: ids,
@@ -348,7 +349,7 @@ void test('daily dates survive midnight, friend links and checkpoints without re
 });
 
 void test('pony appearances follow permanent progress and migrate old saves safely', async () => {
-  const { ponyUnlocked } = await import('../lib/game/cosmetics');
+  const { ponyUnlocked } = await import('../lib/game/catalogue/cosmetics');
   assert.equal(ponyUnlocked('bubblegum', { rounds: 2, wins: 0 }), false);
   assert.equal(ponyUnlocked('bubblegum', { rounds: 3, wins: 0 }), true);
   assert.equal(ponyUnlocked('midnight', { rounds: 99, wins: 0 }), false);

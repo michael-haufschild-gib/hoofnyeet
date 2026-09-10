@@ -1,12 +1,13 @@
-import { Container, Mesh, Shader } from 'pixi.js';
-import type { CarnageCue } from '../escalation';
-import { FIRE_NOISE } from './fire-noise';
-import { SCENE_MESH_VERTEX, unitMeshQuad } from './scene-mesh';
+import { Container, Mesh, Shader, type Renderer } from 'pixi.js';
+import { prepareMesh } from './shaders/prepare-pipelines';
+import type { CarnageCue } from '../catalogue/escalation';
+import { FIRE_NOISE } from './shaders/fire-noise';
+import { SCENE_MESH_VERTEX, unitMeshQuad } from './shaders/scene-mesh';
 import {
   COMBUSTION_CAP,
   combustionCues,
   combustionPose,
-} from './combustion-motion';
+} from './motion/combustion-motion';
 
 // Slot's upward fire turbulence, adapted to a finite irregular cartoon billow.
 // One tiny local quad per ignition: no framebuffer, texture or global filter.
@@ -49,6 +50,13 @@ void main() {
 }
 `;
 
+/**
+ * The pool of ignition flames: exactly `COMBUSTION_CAP` meshes allocated once
+ * and hidden until a cue claims one. `update` takes the scene clock in seconds
+ * and the visible span in world units, and draws nothing under reduced motion
+ * or below 0.55 density. `dispose` is final — a disposed pool will not prepare
+ * or draw again.
+ */
 export class CombustionEffects {
   readonly view = new Container({ label: 'ignited-gore-shaders' });
   private geometry = unitMeshQuad(-0.5, -1);
@@ -73,9 +81,16 @@ export class CombustionEffects {
       }),
   );
   private disposed = false;
+  private prepared = false;
 
   constructor() {
     this.view.addChild(...this.flames);
+  }
+
+  prepare(renderer: Renderer, force = false) {
+    if (this.disposed || (this.prepared && !force)) return;
+    prepareMesh(renderer, this.flames[0]);
+    this.prepared = true;
   }
 
   update(

@@ -5,7 +5,7 @@ import {
   challengeUnlocked,
   insuranceCapacity,
   isChallengeRule,
-} from '../lib/game/challenge-rules';
+} from '../lib/game/catalogue/challenge-rules';
 import { CONTENT_VERSION, modifiers } from '../lib/game/content';
 
 void test('tour challenges unlock from wins and constrain equipment without changing the shared modifier source', () => {

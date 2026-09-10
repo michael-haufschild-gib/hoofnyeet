@@ -4,8 +4,8 @@ import {
   sprayLaunch,
   sprayPose,
   sprayMaterial,
-} from '../lib/game/effects/spray-motion';
-import type { CarnageCue } from '../lib/game/escalation';
+} from '../lib/game/effects/motion/spray-motion';
+import type { CarnageCue } from '../lib/game/catalogue/escalation';
 
 const cue: CarnageCue = {
   id: 'contact',

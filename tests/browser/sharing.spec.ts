@@ -13,7 +13,7 @@ test('incident storage is bounded, cancellation is recoverable, and video fallba
     const sharingPath = '/lib/game/sharing.ts',
       simPath = '/lib/game/simulation.ts',
       contentPath = '/lib/game/content.ts',
-      motionPath = '/lib/game/effects/perk-motion.ts';
+      motionPath = '/lib/game/effects/motion/perk-motion.ts';
     const sharing = await import(sharingPath),
       sim = await import(simPath),
       content = await import(contentPath),
@@ -37,14 +37,20 @@ test('incident storage is bounded, cancellation is recoverable, and video fallba
     );
     const recording = {
       appearance: {
-        hat: 'party',
+        hat: 'disco',
         ponyId: 'bubblegum',
         gentle: false,
         reduced: false,
       },
       frames: [
-        { ...state, time: 0 },
-        { ...state, time: 8, x: 2800, y: -40 },
+        { ...state, time: 0, outfit: { hat: 'brain', ponyId: 'bubblegum' } },
+        {
+          ...state,
+          time: 8,
+          x: 2800,
+          y: -40,
+          outfit: { hat: 'sausage', ponyId: 'bubblegum' },
+        },
       ],
       events: [{ ...flap, sound: 'flap', time: 0.2, id: 'fixture-flap' }],
       duration: 8,

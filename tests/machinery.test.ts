@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CrashWorld, initPhysics, type BodyPose } from '../lib/game/crash';
-import { CATASTROPHES } from '../lib/game/catastrophes';
-import { drivenMechanisms } from '../lib/game/machinery';
+import { CATASTROPHES } from '../lib/game/catalogue/catastrophes';
+import { drivenMechanisms } from '../lib/game/catalogue/machinery';
 import { WORLDS, modifiers } from '../lib/game/content';
-import { artFoot, GROUND_Y } from '../lib/game/geometry';
+import { artFoot, GROUND_Y } from '../lib/game/art/geometry';
 import { createGame } from '../lib/game/simulation';
 
 void test('kinematic hazards and bosses start on their authored path without a one-tick collision catapult', async () => {
@@ -53,7 +53,11 @@ void test('kinematic hazards and bosses start on their authored path without a o
         }
         previous = bodies;
       }
-      assert.ok(trap, `${world.id}/${spec.mechanism} did not enter`);
+      assert.equal(
+        trap?.part,
+        spec.trap,
+        `${world.id}/${spec.mechanism} did not enter`,
+      );
       crash.dispose();
     }
   }
@@ -159,7 +163,7 @@ void test('all catastrophe arrivals fire exactly once even when another beat has
 
 void test('machinery enters during its warning with contacts disabled, then joins the original trajectory', async () => {
   const { mechanismEntrance, mechanismPose, MACHINE_ENTRANCE } =
-    await import('../lib/game/machinery');
+    await import('../lib/game/catalogue/machinery');
   await initPhysics();
   for (const world of WORLDS)
     for (let disaster = 0; disaster < 4; disaster++) {
@@ -195,8 +199,9 @@ void test('machinery enters during its warning with contacts disabled, then join
           assert.ok(frame.time < spec.beat);
         } else if (frame.time >= spec.beat) active = true;
       }
-      assert.ok(
-        seen && active,
+      assert.deepEqual(
+        { seen, active },
+        { seen: true, active: true },
         `${world.id}/${spec.mechanism} has an entrance and activation`,
       );
       const shape = { part: spec.trap, w: 150, h: 155 };

@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { GameState } from '../../lib/game/simulation';
-import type { CarnageEffects } from '../../lib/game/effects/carnage-effects';
+import type { CarnageEffects } from '../../lib/game/effects/slapstick/carnage-effects';
 
 test('six boss cartoons have staged births, rooted props and recorded-clock playback', async ({
   page,
@@ -11,8 +11,8 @@ test('six boss cartoons have staged births, rooted props and recorded-clock play
   await page.waitForFunction(() => window.__hoof?.ready);
   const proof = await page.evaluate(async () => {
     const simPath = '/lib/game/simulation.ts',
-      geometryPath = '/lib/game/geometry.ts',
-      mechanismPath = '/lib/game/machinery.ts';
+      geometryPath = '/lib/game/art/geometry.ts',
+      mechanismPath = '/lib/game/catalogue/machinery.ts';
     const { createGame } = await import(simPath);
     const { fitArt } = await import(geometryPath);
     const { bossPose } = await import(mechanismPath);

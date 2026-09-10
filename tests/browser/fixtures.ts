@@ -19,15 +19,21 @@ export const test = base.extend<{ firstRun: boolean }>({
       });
     await context.addInitScript(() => {
       // Clip previews must also remain silent if a test starts native playback.
-      // oxlint-disable-next-line typescript/unbound-method
-      const nativePlay = HTMLMediaElement.prototype.play;
+      // Read through Reflect so the capture is not an unbound method reference:
+      // the receiver is supplied explicitly at the Reflect.apply below.
+      const nativePlay = Reflect.get(
+        HTMLMediaElement.prototype,
+        'play',
+      ) as HTMLMediaElement['play'];
       HTMLMediaElement.prototype.play = function () {
         this.muted = true;
         return Reflect.apply(nativePlay, this, []);
       };
       // Preserve the native method and explicitly restore its receiver with Reflect.apply.
-      // oxlint-disable-next-line typescript/unbound-method
-      const nativeConnect = AudioNode.prototype.connect;
+      const nativeConnect = Reflect.get(
+        AudioNode.prototype,
+        'connect',
+      ) as AudioNode['connect'];
       Object.defineProperty(AudioNode.prototype, 'connect', {
         configurable: true,
         value: function (

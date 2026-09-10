@@ -82,11 +82,82 @@ try {
     } else await page.keyboard.press(primary ? 'Space' : 'ArrowUp');
   };
   await page.evaluate(() => {
-    const frames = { durations: [], last: 0, active: true };
-    window.__frameMeasurement = frames;
+    window.__frameMeasurement = {
+      durations: [],
+      longFrames: [],
+      longTasks: [],
+      longAnimationFrames: [],
+      started: performance.now(),
+      last: 0,
+      active: true,
+      observers: [],
+    };
+  });
+  // Each observer is installed by its own evaluate call. Splitting them keeps
+  // every serialized callback small enough to read, and a browser that lacks
+  // one entry type still gets the other.
+  await page.evaluate(() => {
+    if (!PerformanceObserver.supportedEntryTypes.includes('longtask')) return;
+    const frames = window.__frameMeasurement;
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (frames.longTasks.length >= 80) break;
+        frames.longTasks.push({
+          atMs: entry.startTime - frames.started,
+          durationMs: entry.duration,
+          name: entry.name,
+        });
+      }
+    });
+    observer.observe({ type: 'longtask' });
+    frames.observers.push(observer);
+  });
+  await page.evaluate(() => {
+    if (
+      !PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')
+    ) {
+      return;
+    }
+    const frames = window.__frameMeasurement;
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (frames.longAnimationFrames.length >= 80) break;
+        frames.longAnimationFrames.push({
+          atMs: entry.startTime - frames.started,
+          durationMs: entry.duration,
+          blockingDurationMs: entry.blockingDuration,
+          scripts: entry.scripts.map((script) => ({
+            durationMs: script.duration,
+            invoker: script.invoker,
+            source: script.sourceURL,
+            forcedStyleAndLayoutDurationMs: script.forcedStyleAndLayoutDuration,
+          })),
+        });
+      }
+    });
+    observer.observe({ type: 'long-animation-frame' });
+    frames.observers.push(observer);
+  });
+  await page.evaluate(() => {
+    const frames = window.__frameMeasurement;
     const sample = (now) => {
       if (!frames.active) return;
-      if (frames.last) frames.durations.push(now - frames.last);
+      if (frames.last) {
+        const duration = now - frames.last;
+        frames.durations.push(duration);
+        // Read the UI only for an outlier; continuous DOM sampling would add
+        // work to the frame loop we are measuring.
+        if (duration > 50 && frames.longFrames.length < 80) {
+          frames.longFrames.push({
+            atMs: now - frames.started,
+            durationMs: duration,
+            control: document
+              .querySelector('.action-pad.primary')
+              ?.textContent.trim(),
+            hidden: document.hidden,
+          });
+        }
+      }
       frames.last = now;
       requestAnimationFrame(sample);
     };
@@ -123,6 +194,7 @@ try {
   const rendering = await page.evaluate(() => {
     const measurement = window.__frameMeasurement;
     measurement.active = false;
+    for (const observer of measurement.observers) observer.disconnect();
     const samples = measurement.durations.sort((a, b) => a - b);
     const canvas = document.querySelector('canvas');
     const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
@@ -135,7 +207,11 @@ try {
       fps:
         (1000 * samples.length) / samples.reduce((total, ms) => total + ms, 0),
       p95FrameMs: samples[Math.floor(samples.length * 0.95)],
+      maxFrameMs: samples.at(-1),
       framesOver50ms: samples.filter((ms) => ms > 50).length,
+      longFrames: measurement.longFrames,
+      longTasks: measurement.longTasks,
+      longAnimationFrames: measurement.longAnimationFrames,
       jsHeapMB: performance.memory?.usedJSHeapSize / 1e6,
       renderScale: (() => {
         const canvas = document.querySelector('canvas');

@@ -5,7 +5,7 @@ import {
   impactMote,
   pressureWave,
   type MoteMotion,
-} from '../lib/game/effects/impact-motion';
+} from '../lib/game/effects/motion/impact-motion';
 
 const shard: MoteMotion = {
   born: 8,

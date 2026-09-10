@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { GameController } from '../../lib/game/controller';
-import type { WorldDefinition } from '../../lib/game/content';
+import { SYNERGIES, type WorldDefinition } from '../../lib/game/content';
 declare global {
   interface Window {
     __hoof: GameController;
@@ -156,8 +156,10 @@ for (const group of groups)
         fullPage: true,
       });
     }
-    expect(captures).toHaveLength(
-      group === 'synergy' ? 8 : group.startsWith('ending-') ? 4 : 16,
-    );
+    if (group === 'synergy')
+      expect(captures.map((capture) => capture.id)).toEqual(
+        SYNERGIES.map((combo) => `synergy-${combo.id}`),
+      );
+    else expect(captures).toHaveLength(group.startsWith('ending-') ? 4 : 16);
     expect(errors).toEqual([]);
   });

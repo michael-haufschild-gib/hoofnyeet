@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ponyPose } from '../lib/game/pose';
+import { ponyPose } from '../lib/game/art/pose';
 import { createGame } from '../lib/game/simulation';
 void test('compression, release and flap have distinct readable poses on the shared clock', () => {
   const s = createGame();

@@ -128,7 +128,8 @@ void test('completed flips score; only the first three earn a velocity bonus', (
     act(s, 'secondary');
     seconds(s, 0.86);
     assert.equal(s.flips, i + 1);
-    assert.equal(s.style, (i + 1) * 100);
+    assert.equal(s.routine!.technical, (i + 1) * 100);
+    assert.equal(s.style, s.routine!.technical + s.routine!.artistry);
     assert.equal(s.flipActive, false);
     assert.ok(Math.abs(s.vx - expected - (i < 3 ? 30 : 0)) < 1);
   }
@@ -223,7 +224,7 @@ void test('restart clears resources, score, rotation, failure and replay phase',
   assert.equal(s.distance, 0);
   assert.equal(s.sceneTime, undefined);
 });
-void test('bad or unavailable storage never prevents playing', () => {
+void test('corrupt, throwing or absent local storage falls back to the default save rather than blocking play', () => {
   assert.deepEqual(readSave({ getItem: () => '{broken' }), defaultSave());
   assert.deepEqual(
     readSave({
@@ -292,7 +293,8 @@ void test('a landing plays once and stays on results until the player asks other
 });
 
 void test('each impact fires once and freezes the shared scene clock at contact', async () => {
-  const { landingTimeline } = await import('../lib/game/landing-timeline');
+  const { landingTimeline } =
+    await import('../lib/game/catalogue/landing-timeline');
   for (const id of [
     'haystack',
     'mud',

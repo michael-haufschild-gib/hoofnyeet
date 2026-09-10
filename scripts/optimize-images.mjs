@@ -47,6 +47,12 @@ const sizes = {
   'carnage/splat.webp': 192,
   'carnage/tooth.webp': 128,
   'carnage/nuclear-cloud.webp': 640,
+  'carnage/organ-cart.webp': 384,
+  'carnage/lunar-blender.webp': 384,
+  'carnage/soul-toaster.webp': 384,
+  'costumes/disco-skull.webp': 384,
+  'costumes/brain-bonnet.webp': 384,
+  'costumes/sausage-crown.webp': 384,
   bone: 96,
   eye: 96,
   'eyeball-up': 128,
@@ -69,70 +75,89 @@ const sizes = {
   cube: 384,
 };
 
-export async function optimizeImages() {
-  const files = (await fs.readdir(publicArt, { recursive: true }))
-    .filter((file) => file.endsWith('.webp'))
-    .sort();
-  const report = [];
-  for (const file of files) {
-    const target = path.join(publicArt, file);
-    const master = path.join(masterDirectory, file);
-    await fs.mkdir(path.dirname(master), { recursive: true });
-    try {
-      await fs.access(master);
-    } catch {
-      await fs.copyFile(target, master);
-    }
-    const original = await fs.readFile(master);
-    const metadata = await sharp(original).metadata();
-    const id = path.basename(file, '.webp');
-    const sprite = file.startsWith('sprites/');
-    const preserve = sprite && hero.has(id);
-    const cap =
-      sizes[file] ??
-      (sprite
-        ? (sizes[id] ?? (largeProps.has(id) || hero.has(id) ? Infinity : 320))
-        : Infinity);
-    const resize = Math.max(metadata.width, metadata.height) > cap;
-    let output = original;
-    if (!preserve) {
-      let pipeline = sharp(original);
-      if (resize)
-        pipeline = pipeline.resize({
-          width: cap,
-          height: cap,
-          fit: 'inside',
-          withoutEnlargement: true,
-        });
-      const candidate = await pipeline
-        .webp({
-          quality: sprite || file.startsWith('carnage/') ? 86 : 82,
-          alphaQuality: 100,
-          effort: 6,
-          smartSubsample: true,
-        })
-        .toBuffer();
-      if (resize || candidate.length < original.length * 0.9)
-        output = candidate;
-    }
-    const current = await fs.readFile(target);
-    if (!current.equals(output)) await fs.writeFile(target, output);
-    const optimized = await sharp(output).metadata();
-    report.push({
-      file,
-      beforeBytes: original.length,
-      bytes: output.length,
-      beforeWidth: metadata.width,
-      beforeHeight: metadata.height,
-      width: optimized.width,
-      height: optimized.height,
-      alpha: optimized.hasAlpha,
-      preserved: preserve,
+/** Copies the runtime texture into the immutable master tree the first time it is seen. */
+async function ensureMaster(file) {
+  const master = path.join(masterDirectory, file);
+  await fs.mkdir(path.dirname(master), { recursive: true });
+  try {
+    await fs.access(master);
+  } catch {
+    await fs.copyFile(path.join(publicArt, file), master);
+  }
+  return master;
+}
+
+/** Longest-edge budget for one texture in pixels; Infinity keeps it at source size. */
+function sizeCapFor(file, id, sprite) {
+  if (sizes[file] !== undefined) return sizes[file];
+  if (!sprite) return Infinity;
+  if (sizes[id] !== undefined) return sizes[id];
+  return largeProps.has(id) || hero.has(id) ? Infinity : 320;
+}
+
+/** Sprites and character art carry a higher quality floor than background scenery. */
+function qualityFor(file, sprite) {
+  const detailed =
+    sprite || file.startsWith('carnage/') || file.startsWith('costumes/');
+  return detailed ? 86 : 82;
+}
+
+/** Re-encodes a texture, keeping the original when the saving would be marginal. */
+async function compress(original, { cap, resize, quality }) {
+  let pipeline = sharp(original);
+  if (resize) {
+    pipeline = pipeline.resize({
+      width: cap,
+      height: cap,
+      fit: 'inside',
+      withoutEnlargement: true,
     });
   }
+  const candidate = await pipeline
+    .webp({ quality, alphaQuality: 100, effort: 6, smartSubsample: true })
+    .toBuffer();
+  if (resize || candidate.length < original.length * 0.9) return candidate;
+  return original;
+}
+
+/** Optimizes one texture in place and returns its before/after row for the report. */
+async function optimizeOne(file) {
+  const target = path.join(publicArt, file);
+  const original = await fs.readFile(await ensureMaster(file));
+  const metadata = await sharp(original).metadata();
+  const id = path.basename(file, '.webp');
+  const sprite = file.startsWith('sprites/');
+  const preserve = sprite && hero.has(id);
+  const cap = sizeCapFor(file, id, sprite);
+  const resize = Math.max(metadata.width, metadata.height) > cap;
+  const output = preserve
+    ? original
+    : await compress(original, {
+        cap,
+        resize,
+        quality: qualityFor(file, sprite),
+      });
+  const current = await fs.readFile(target);
+  if (!current.equals(output)) await fs.writeFile(target, output);
+  const optimized = await sharp(output).metadata();
+  return {
+    file,
+    beforeBytes: original.length,
+    bytes: output.length,
+    beforeWidth: metadata.width,
+    beforeHeight: metadata.height,
+    width: optimized.width,
+    height: optimized.height,
+    alpha: optimized.hasAlpha,
+    preserved: preserve,
+  };
+}
+
+/** Rewrites the carnage manifest with the dimensions the textures actually have. */
+async function updateManifest(report) {
   const manifestPath = path.join(publicArt, 'carnage/manifest.json');
-  const previousManifest = await fs.readFile(manifestPath, 'utf8');
-  const manifest = JSON.parse(previousManifest);
+  const previous = await fs.readFile(manifestPath, 'utf8');
+  const manifest = JSON.parse(previous);
   for (const asset of manifest.assets) {
     const row = report.find((r) => `/art/${r.file}` === asset.path);
     Object.assign(asset, {
@@ -141,16 +166,22 @@ export async function optimizeImages() {
       bytes: row.bytes,
     });
   }
-  const nextManifest = JSON.stringify(manifest, null, 2) + '\n';
-  if (nextManifest !== previousManifest)
-    await fs.writeFile(manifestPath, nextManifest);
-  await fs.mkdir(path.join(root, 'output/image-optimization'), {
-    recursive: true,
-  });
+  const next = JSON.stringify(manifest, null, 2) + '\n';
+  if (next !== previous) await fs.writeFile(manifestPath, next);
+}
+
+/** Records the full before/after table so a later run can be compared against it. */
+async function writeReport(report) {
+  const directory = path.join(root, 'output/image-optimization');
+  await fs.mkdir(directory, { recursive: true });
   await fs.writeFile(
-    path.join(root, 'output/image-optimization/after.json'),
+    path.join(directory, 'after.json'),
     JSON.stringify(report, null, 2) + '\n',
   );
+}
+
+/** Prints the byte and decoded-size totals that the asset budget is judged on. */
+function logSummary(report) {
   const sum = (key) => report.reduce((n, row) => n + row[key], 0);
   console.log(
     JSON.stringify(
@@ -168,6 +199,17 @@ export async function optimizeImages() {
       2,
     ),
   );
+}
+
+export async function optimizeImages() {
+  const files = (await fs.readdir(publicArt, { recursive: true }))
+    .filter((file) => file.endsWith('.webp'))
+    .sort();
+  const report = [];
+  for (const file of files) report.push(await optimizeOne(file));
+  await updateManifest(report);
+  await writeReport(report);
+  logSummary(report);
 }
 
 if (

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RenderBudget } from '../lib/game/render-budget';
+import { RenderBudget } from '../lib/game/art/render-budget';
 
 function sample(budget: RenderBudget, fps: number, seconds: number) {
   for (let i = 0; i < fps * seconds; i++) budget.sample(1 / fps, true);

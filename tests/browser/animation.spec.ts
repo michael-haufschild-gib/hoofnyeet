@@ -262,12 +262,16 @@ test('ability vortex renders its charge and release, respects reduced motion and
     const budget =
       !scene.impactEffects.lens.filter.enabled &&
       scene.impactEffects.portal.visible;
-    const oldFilter = scene.impactEffects.lens.filter;
+    scene.impactEffects.density = 1;
+    r.draw(state, 0, state.time);
+    const beforeRecovery = r.canvas.toDataURL();
     r.restoreGraphics();
     r.draw(state, 0, state.time);
     const restored =
       scene.scene.filters?.[0] === scene.impactEffects.lens.filter &&
-      oldFilter !== scene.impactEffects.lens.filter;
+      scene.impactEffects.lens.filter.enabled &&
+      scene.impactEffects.portal.visible &&
+      beforeRecovery === r.canvas.toDataURL();
     state.wreck.abilityAge = 1.31;
     state.time = state.sceneTime = 1.31;
     r.draw(state, 0, state.time);

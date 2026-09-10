@@ -15,7 +15,7 @@ test('twin rocket flames remain on their painted nozzles through launch, squash 
   await page.waitForFunction(() => window.__hoof?.ready);
   const proof = await page.evaluate(async () => {
     const simPath = '/lib/game/simulation.ts',
-      rigPath = '/lib/game/rocket-rig.ts';
+      rigPath = '/lib/game/art/rocket-rig.ts';
     const { createGame } = await import(simPath),
       { ROCKET_ART } = await import(rigPath);
     const c = window.__hoof;
@@ -151,7 +151,7 @@ test('twin rocket flames remain on their painted nozzles through launch, squash 
   ] as const)
     expect(proof[key], key).toBe(true);
   for (const shot of proof.captures)
-      await info.attach(`${info.project.name}-rocket-${shot.id}`, {
+    await info.attach(`${info.project.name}-rocket-${shot.id}`, {
       body: Buffer.from(shot.url.split(',')[1], 'base64'),
       contentType: 'image/webp',
     });

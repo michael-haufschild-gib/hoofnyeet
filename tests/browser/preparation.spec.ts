@@ -163,7 +163,7 @@ test('all six prepared worlds play their complete sound catalog without late ass
     expect(await page.evaluate(() => window.__hoof.error)).toBe('');
     playing = true;
     const proof = await page.evaluate(async (world) => {
-      const path = '/lib/game/audio-assets.ts';
+      const path = '/lib/game/catalogue/audio-assets.ts';
       const { EFFECT_AUDIO, MUSIC_AUDIO, levelAudio } = await import(path);
       const c = window.__hoof;
       const buffers = (
