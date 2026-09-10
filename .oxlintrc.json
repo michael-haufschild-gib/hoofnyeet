@@ -9,6 +9,7 @@
     "import",
     "jsx-a11y"
   ],
+  "jsPlugins": ["./lint-rules/index.js"],
   "categories": {
     "correctness": "error"
   },
@@ -21,13 +22,28 @@
     "typeAware": true,
     "typeCheck": true
   },
-  "ignorePatterns": ["out/**", "build/**", "dist/**", "coverage/**"],
+  "ignorePatterns": [
+    "out/**",
+    "build/**",
+    "dist/**",
+    "coverage/**",
+    "output/**",
+    "logs/**"
+  ],
   "rules": {
     "no-array-constructor": "error",
+    "no-console": "error",
     "no-var": "error",
     "prefer-const": "error",
     "prefer-rest-params": "error",
     "prefer-spread": "error",
+    "max-lines": ["error", { "max": 500, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": [
+      "error",
+      { "max": 85, "skipBlankLines": true, "skipComments": true }
+    ],
+    "max-depth": ["error", { "max": 4 }],
+    "max-nested-callbacks": ["error", { "max": 4 }],
     "import/no-anonymous-default-export": "warn",
     "react/display-name": "error",
     "react/jsx-no-comment-textnodes": "error",
@@ -42,6 +58,45 @@
     "typescript/no-namespace": "error",
     "typescript/no-require-imports": "error",
     "typescript/no-unnecessary-type-constraint": "error",
-    "typescript/no-unsafe-function-type": "error"
-  }
+    "typescript/no-unsafe-function-type": "error",
+    "hoof/cognitive-complexity": ["error", { "max": 10 }],
+    "hoof/no-commented-out-code": "error",
+    "hoof/no-deferred-work-comments": "error",
+    "hoof/no-disabled-tests": "error",
+    "hoof/no-lint-suppression": "error",
+    "hoof/no-redundant-comment": "error",
+    "hoof/no-shallow-assertions": "error",
+    "hoof/no-snapshot-assertions": "error",
+    "hoof/require-test-assertion": "error",
+    "hoof/require-test-description": "error",
+    "hoof/require-tsdoc": "error"
+  },
+  "overrides": [
+    {
+      "files": ["tests/**"],
+      "rules": {
+        "max-lines": ["error", { "max": 1000, "skipBlankLines": true, "skipComments": true }],
+        "max-lines-per-function": "off",
+        "max-nested-callbacks": "off",
+        "max-depth": "off",
+        "no-console": "off",
+        "hoof/cognitive-complexity": "off",
+        "hoof/require-tsdoc": "off"
+      }
+    },
+    {
+      "files": ["scripts/**", "*.config.ts", "*.config.mjs"],
+      "rules": {
+        "no-console": "off",
+        "hoof/require-tsdoc": "off"
+      }
+    },
+    {
+      "files": ["lint-rules/**"],
+      "rules": {
+        "hoof/require-tsdoc": "off",
+        "hoof/no-commented-out-code": "off"
+      }
+    }
+  ]
 }
